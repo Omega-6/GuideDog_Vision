@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>GuideDog</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+        html, body { height: 100%; overflow: hidden; background: #000; color: #fff; font-family: -apple-system, sans-serif; }
+        
+        .app { height: 100dvh; display: flex; flex-direction: column; position: relative; }
+        
+        /* Camera preview - visible for sighted helpers */
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.3;
+        }
+        
+        /* Main overlay */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        
+        /* Status bar */
+        .status-bar {
+            padding: 15px;
+            padding-top: max(15px, env(safe-area-inset-top));
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        
+        .badge-safe { background: #0f8; color: #000; }
+        .badge-warning { background: #fa0; color: #000; animation: pulse 1s infinite; }
+        .badge-danger { background: #f44; color: #fff; animation: pulse 0.3s infinite; }
+        
+        .ai-badge {
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.2);
+        }
+        
+        @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        /* Alert area */
+        .alert-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .alert-box {
+            width: 100%;
+            max-width: 350px;
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        
+        .alert-box.safe {
+            background: rgba(0, 40, 20, 0.8);
+            border: 3px solid #0f8;
+        }
+
+        .alert-box.warning {
+            background: rgba(50, 30, 0, 0.85);
+            border: 3px solid #fa0;
+            animation: pulse 1s infinite;
+        }
+
+        .alert-box.danger {
+            background: rgba(60, 10, 10, 0.9);
+            border: 4px solid #f44;
+            animation: shake 0.3s infinite;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        .alert-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-text {
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        
+        .alert-detail {
+            font-size: 16px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+        
+        /* Direction indicators */
+        .direction-row {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .direction-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+        
+        .direction-btn.active {
+            opacity: 1;
+            border-color: #fa0;
+            background: rgba(255,170,0,0.3);
+        }
+        
+        .direction-btn.danger {
+            border-color: #f44;
+            background: rgba(255,68,68,0.4);
+            animation: pulse 0.3s infinite;
+        }
+        
+        /* Control bar */
+        .control-bar {
+            padding: 15px;
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            gap: 10px;
+        }
+        
+        .ctrl-btn {
+            flex: 1;
+            padding: 18px 10px;
+            border: none;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        
+        .ctrl-btn.tall {
+            padding: 36px 10px;
+        }
+        
+        .ctrl-btn .icon { font-size: 24px; }
+        
+        .ctrl-btn.mic {
+            background: #48f;
+        }
+        
+        .ctrl-btn.mic.listening {
+            background: #f44;
+            animation: pulse 0.5s infinite;
+        }
+        
+        /* Loading */
+        .loading {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
+        .loading.hidden { opacity: 0; pointer-events: none; display: none; }
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 5px solid #333;
+            border-top-color: #0f8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { font-size: 18px; margin-top: 25px; text-align: center; }
+        .loading-subtext { font-size: 14px; margin-top: 10px; color: #888; text-align: center; }
+        
+        /* Help */
+        .help {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.98);
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .help.visible { display: flex; }
+        .help-title { font-size: 24px; font-weight: 700; margin-bottom: 20px; text-align: center; }
+        .help-item { padding: 15px; margin-bottom: 10px; background: #111; border-radius: 10px; }
+        .help-label { font-size: 16px; font-weight: 700; color: #48f; }
+        .help-desc { font-size: 14px; color: #aaa; margin-top: 5px; }
+        .help-close { margin-top: 20px; padding: 20px; background: #48f; border: none; border-radius: 15px; color: #fff; font-size: 18px; font-weight: 700; }
+        .version-tag { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); right: 8px; font-size: 10px; color: rgba(255,255,255,0.3); z-index: 5; pointer-events: none; }
+        .gesture-hint { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 15px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading" style="display:none;"></div>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const p = document.getElementById('privacyNotice');
+        if (!p) return;
+        p.style.display = 'flex';
+        let privacyRead = false;
+
+        p.addEventListener('click', () => {
+            if (!privacyRead) {
+                // FIRST TAP — unlock audio and read privacy aloud
+                privacyRead = true;
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    ctx.resume();
+                    const primer = new SpeechSynthesisUtterance(' ');
+                    primer.volume = 0; primer.rate = 10;
+                    speechSynthesis.speak(primer);
+                } catch(e){}
+                setTimeout(() => {
+                    try {
+                        const u = new SpeechSynthesisUtterance(
+                            'Privacy and permissions. ' +
+                            'GuideDog needs camera access to detect obstacles. All detection runs on your device. ' +
+                            'When you scan, a photo may be sent to cloud A.I. No images are stored. ' +
+                            'No account required. No personal data collected. ' +
+                            'Tap again to continue.'
+                        );
+                        u.rate = 1.0; u.volume = 1.0;
+                        speechSynthesis.speak(u);
+                    } catch(e){}
+                }, 200);
+                return;
+            }
+
+            // SECOND TAP — dismiss privacy, show help
+            try { speechSynthesis.cancel(); } catch(e){}
+            p.style.display = 'none';
+
+            const h = document.getElementById('help');
+            if (h) {
+                h.classList.add('visible');
+                setTimeout(() => {
+                    try {
+                        const u = new SpeechSynthesisUtterance(
+                            'GuideDog protects you automatically. ' +
+                            'Double tap to scan. Hold to speak. Swipe to check sides. ' +
+                            'Tap anywhere to start.'
+                        );
+                        u.rate = 1.0; u.volume = 1.0;
+                        speechSynthesis.speak(u);
+                    } catch(e){}
+                }, 300);
+
+                h.addEventListener('click', () => {
+                    try { speechSynthesis.cancel(); } catch(e){}
+                    h.classList.remove('visible');
+                    window._helpDismissed = true;
+                    if (typeof startApp === 'function') startApp();
+                }, { once: true });
+            }
+        });
+    });
+    </script>
+    
+    <noscript>
+        <div style="position:fixed;inset:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;font-family:sans-serif;font-size:18px;">
+            GuideDog requires JavaScript to run. Please enable JavaScript in your browser.
+        </div>
+    </noscript>
+
+    <div class="help" id="privacyNotice" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+        <div class="help-title" id="privacyTitle">Privacy &amp; Permissions</div>
+        <div class="help-item">
+            <div class="help-label">Camera</div>
+            <div class="help-desc">GuideDog needs camera access to detect obstacles. All detection runs on your device. Please allow camera access when prompted.</div>
+        </div>
+        <div class="help-item">
+            <div class="help-label">Cloud AI (Optional)</div>
+            <div class="help-desc">When you scan, a photo may be sent to a cloud AI for advanced scene description. No images are stored after analysis.</div>
+        </div>
+        <div class="help-item">
+            <div class="help-label">No Account Required</div>
+            <div class="help-desc">No personal data is collected. No sign-up needed.</div>
+        </div>
+        <button class="help-close" id="privacyAccept">I Understand — Continue</button>
+        <div style="text-align:center;color:#888;font-size:13px;margin-top:10px;">Tap once to hear aloud · Tap again to continue</div>
+    </div>
+
+    <div class="help" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <div class="help-title" id="helpTitle">GuideDog</div>
+
+        <div class="help-item">
+            <div class="help-label">AUTOMATIC PROTECTION</div>
+            <div class="help-desc">GuideDog constantly monitors your surroundings using AI. It will automatically warn you about walls, obstacles, and hazards. You don't need to do anything — just walk.</div>
+        </div>
+
+        <div class="help-item">
+            <div class="help-label">GESTURES</div>
+            <div class="help-desc">
+                <strong>Hold screen</strong> — speak a voice command<br>
+                <strong>Double tap</strong> — scan surroundings<br>
+                <strong>Swipe left/right</strong> — check sides
+            </div>
+        </div>
+
+        <div class="help-item">
+            <div class="help-label">VOICE COMMANDS</div>
+            <div class="help-desc">
+                "What's around" — describe area<br>
+                "Is it safe" — check path<br>
+                "Left" / "Right" — check sides<br>
+                "Stop" / "Resume" — pause or resume alerts<br>
+                "Scan" — detailed scan<br>
+                "Help" — hear this again
+            </div>
+        </div>
+
+        <div class="help-item">
+            <div class="help-label">DISTANCE ALERTS</div>
+            <div class="help-desc">You'll hear "Stop" when something is very close, and alerts when approaching obstacles.</div>
+        </div>
+
+        <button class="help-close" id="helpClose">START GUIDEDOG</button>
+        <div style="text-align:center;color:#888;font-size:13px;margin-top:10px;">Tap anywhere to start</div>
+    </div>
+    
+    <div class="version-tag" id="versionTag">build 25</div>
+
+    <div class="app">
+        <video id="video" autoplay playsinline muted></video>
+        
+        <div class="overlay">
+            <div class="status-bar">
+                <div class="status-badge" id="statusBadge" style="display:none;">SAFE</div>
+                <div class="ai-badge" id="aiBadge" aria-hidden="true">AI Active</div>
+            </div>
+
+            <div class="alert-area" id="alertArea">
+                <div class="alert-box safe" id="alertBox" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="alert-icon" id="alertIcon" aria-hidden="true">OK</div>
+                    <div class="alert-text" id="alertText">Path Clear</div>
+                    <div class="alert-detail" id="alertDetail">Walking is safe</div>
+                </div>
+                <div class="gesture-hint" id="gestureHint">Hold to speak · Double-tap to scan</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"
+            integrity="sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
+            integrity="sha384-7qLdgfEQyO9ZQi9ArRHigK+IBto4XPk468jAqc+fnsXaZIcMAhQeLwzggRK7aESl"
+            crossorigin="anonymous"></script>
+
+    <script type="module">
+    (async () => {
+        try {
+            const m = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+            window.__txPipeline = m.pipeline;
+            window.__txEnv = m.env;
+            window.dispatchEvent(new CustomEvent('tx-ready'));
+        } catch (e1) {
+            try {
+                const m = await import('https://esm.sh/@xenova/transformers@2.17.2');
+                window.__txPipeline = m.pipeline;
+                window.__txEnv = m.env;
+                window.dispatchEvent(new CustomEvent('tx-ready'));
+            } catch (e2) {
+                console.error('Transformers.js failed to load:', e2.message || e2);
+                window.dispatchEvent(new CustomEvent('tx-failed'));
+            }
+        }
+    })();
+    </script>
+
+    <script>
+    // ========== CONFIG ==========
+    const CONFIG = {
+        WORKER_URL: "https://guidedog.kpremks.workers.dev",
+        
+        // Distance zones (in meters, estimated)
+        DANGER_ZONE: 1.0,      // < 1m = DANGER
+        WARNING_ZONE: 2.0,     // < 2m = WARNING  
+        AWARENESS_ZONE: 4.0,   // < 4m = awareness
+        
+        // Timing
+        AI_SCAN_INTERVAL: 8000,      // AI scan every 8s — cloud AI compensates for no LiDAR
+        DEPTH_SCAN_INTERVAL: 400,    // depth model every 400ms (was 600)
+        LOCAL_SCAN_INTERVAL: 200,    // Local detection every 200ms (was 300)
+        VOICE_COOLDOWN: 1500,        // Don't repeat same alert for 1.5s (was 2s)
+        VIBRATE_COOLDOWN: 400,
+
+        // Confidence threshold for naming objects
+        HIGH_CONFIDENCE: 0.7,        // Must be >70% confident to name the object
+        
+        // Objects that matter for navigation
+        CRITICAL: ["car", "bus", "truck", "motorcycle", "bicycle"],
+        OBSTACLES: ["person", "chair", "bench", "couch", "bed", "dining table",
+                    "refrigerator", "potted plant", "backpack",
+                    "fire hydrant", "stop sign", "parking meter", "laptop", "tv"]
+    };
+    
+    // ========== STATE ==========
+    const state = {
+        video: null,
+        model: null,
+        isRunning: false,
+        isPaused: false,
+        
+        // Detection results
+        localDetections: [],
+        aiResult: null,
+        lastAIScan: 0,
+        aiScanInProgress: false, // prevents overlapping requests (sonnet takes 2-3s)
+        aiHazard: null,          // persists AI cloud-detected hazard across loop iterations
+        depthHazard: null,       // persists depth-model hazard (separate from AI)
+
+        // Depth estimation — LiDAR (WebXR) or Transformers.js fallback
+        xrSession: null,
+        xrDepthActive: false,
+        depthPipeline: null,
+        depthHistory: [],        // rolling window of {c,l,r} readings
+        lastDepthScan: 0,
+        depthCalibration: null,  // { depthVal, realMeters } — auto-calibrated from COCO-SSD
+        
+        // Current status
+        currentStatus: 'safe',   // safe, warning, danger — statusChanged compares against this
+        currentObstacle: null,
+
+        // Alert timing
+        lastAlerts: {},
+        lastVibrate: 0,
+        lastVoice: 0,
+        lastAlertSound: 0,       // rate-limits beeping during sustained alerts
+        lastDangerAnnounce: 0,   // re-announce sustained danger every 5s max
+        
+        // Voice
+        recognition: null,
+        isListening: false,
+        
+        // Audio
+        audioCtx: null,
+        audioUnlocked: false
+    };
+    
+    // ========== AUDIO ==========
+    function initAudio() {
+        try {
+            state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('Web Audio API unavailable:', e);
+            // Audio alerts will be silent; voice and vibration still work
+            const banner = document.getElementById('aiBadge');
+            if (banner) banner.textContent = 'Audio Unavailable';
+        }
+    }
+    
+    function resumeAudio() {
+        if (state.audioCtx?.state === 'suspended') {
+            state.audioCtx.resume().catch(() => {});
+        }
+    }
+
+    // iOS Safari locks AudioContext and speechSynthesis until a user gesture.
+    // Call this from every tap/click handler to ensure audio works.
+    function unlockAudio() {
+        resumeAudio();
+        if (!state.audioUnlocked) {
+            try {
+                // Prime speechSynthesis with a zero-volume utterance
+                const primer = new SpeechSynthesisUtterance(' ');
+                primer.volume = 0;
+                primer.rate = 10;
+                speechSynthesis.speak(primer);
+            } catch (e) {}
+            state.audioUnlocked = true;
+        }
+    }
+    
+    function playBeep(frequency, duration, pan = 0, volume = 0.5) {
+        if (!state.audioCtx) return;
+        resumeAudio();
+        
+        try {
+            const osc = state.audioCtx.createOscillator();
+            const gain = state.audioCtx.createGain();
+            const panner = state.audioCtx.createStereoPanner();
+
+            osc.frequency.value = frequency;
+            osc.type = 'sine';
+
+            gain.gain.setValueAtTime(volume, state.audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, state.audioCtx.currentTime + duration);
+
+            panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+            osc.connect(gain);
+            gain.connect(panner);
+            panner.connect(state.audioCtx.destination);
+
+            osc.start();
+            osc.stop(state.audioCtx.currentTime + duration);
+
+            // Disconnect nodes after playback to prevent memory leak
+            osc.onended = () => {
+                osc.disconnect();
+                gain.disconnect();
+                panner.disconnect();
+            };
+        } catch (e) {
+            console.warn('playBeep error:', e);
+        }
+    }
+    
+    // Alert sounds based on urgency
+    function playAlertSound(position, urgency) {
+        let pan = 0;
+        if (position === 'left') pan = -0.8;
+        else if (position === 'right') pan = 0.8;
+        
+        if (urgency === 'danger') {
+            // Rapid high beeps
+            playBeep(1200, 0.1, pan, 0.7);
+            setTimeout(() => playBeep(1200, 0.1, pan, 0.7), 150);
+            setTimeout(() => playBeep(1200, 0.1, pan, 0.7), 300);
+        } else if (urgency === 'warning') {
+            // Double beep
+            playBeep(800, 0.15, pan, 0.5);
+            setTimeout(() => playBeep(800, 0.15, pan, 0.5), 200);
+        } else {
+            // Single soft beep
+            playBeep(500, 0.2, pan, 0.3);
+        }
+    }
+    
+    // ========== VIBRATION ==========
+    function vibrate(pattern) {
+        const now = Date.now();
+        if (now - state.lastVibrate < CONFIG.VIBRATE_COOLDOWN) return;
+        state.lastVibrate = now;
+        
+        try {
+            navigator.vibrate?.(pattern);
+        } catch (e) {}
+    }
+    
+    function vibrateAlert(urgency) {
+        if (urgency === 'danger') {
+            vibrate([200, 100, 200, 100, 200]);
+        } else if (urgency === 'warning') {
+            vibrate([150, 100, 150]);
+        } else {
+            vibrate([100]);
+        }
+    }
+    
+    // ========== SPEECH ==========
+    // iOS Safari bug: speechSynthesis.cancel() followed immediately by .speak()
+    // can silently drop the utterance. We work around this by:
+    // 1. Never calling cancel() — just let utterances queue
+    // 2. Using a single doSpeak() that handles the queue
+    // 3. Unlocking audio on first touch globally, not just in alertArea
+    let _currentSpeechPriority = 0;
+    let _lastSpeechTime = 0;
+
+    // Ensure audio works — attach to document level so ANY touch unlocks
+    document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+    document.addEventListener('click', unlockAudio, { once: true });
+
+    function doSpeak(text, rate = 1.1) {
+        try {
+            // Don't cancel — iOS drops speech after cancel. Just let it queue.
+            // speechSynthesis only queues, so rapid calls won't overlap.
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = rate;
+            u.volume = 1.0;
+            u.onend = () => { _currentSpeechPriority = 0; };
+            u.onerror = () => { _currentSpeechPriority = 0; };
+            speechSynthesis.speak(u);
+            _lastSpeechTime = Date.now();
+            console.log('Speaking:', text);
+        } catch (e) {
+            console.warn('Speech error:', e);
+        }
+    }
+
+    function speak(text, force = false) {
+        if (!text) return;
+        const now = Date.now();
+        if (!force && now - _lastSpeechTime < CONFIG.VOICE_COOLDOWN) return;
+        if (state.isListening) stopListening();
+        // Cancel only for forced user-initiated speech (button taps)
+        if (force) { try { speechSynthesis.cancel(); } catch(e){} }
+        _currentSpeechPriority = 0;  // user speech has no priority lock
+        doSpeak(text);
+    }
+
+    function speakAlert(key, text, priority = 2) {
+        const now = Date.now();
+        const cooldowns = { 3: 2000, 2: 3000, 1: 5000 };
+        const cooldown = cooldowns[priority] || 3000;
+
+        if (now - (state.lastAlerts[key] || 0) < cooldown) return;
+        if (priority < _currentSpeechPriority && now - _lastSpeechTime < 1500) return;
+
+        state.lastAlerts[key] = now;
+        if (state.isListening) stopListening();
+
+        // For danger: cancel current speech and speak immediately
+        if (priority >= 3) {
+            try { speechSynthesis.cancel(); } catch(e){}
+            // iOS needs a tiny delay after cancel
+            setTimeout(() => doSpeak(text, 1.3), 50);
+        } else if (!speechSynthesis.speaking) {
+            doSpeak(text, 1.1);
+        }
+        // If something is already speaking and this isn't danger, skip — don't queue
+        _currentSpeechPriority = priority;
+    }
+    
+    // ========== SPEECH RECOGNITION ==========
+    function initSpeechRecognition() {
+        try {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) return false;
+            
+            state.recognition = new SR();
+            state.recognition.continuous = false;
+            state.recognition.interimResults = false;
+            state.recognition.lang = 'en-US';
+            
+            state.recognition.onstart = () => {
+                state.isListening = true;
+                updateMicButton(true);
+            };
+            
+            state.recognition.onresult = (e) => {
+                const text = e.results[0][0].transcript.toLowerCase();
+                console.log('Heard:', text);
+                handleVoiceCommand(text);
+            };
+            
+            state.recognition.onend = () => {
+                state.isListening = false;
+                updateMicButton(false);
+            };
+            
+            state.recognition.onerror = (e) => {
+                state.isListening = false;
+                updateMicButton(false);
+                if (e.error === 'no-speech') {
+                    speak('No speech heard. Tap microphone and try again.');
+                }
+            };
+            
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    
+    function startListening() {
+        if (!state.recognition) {
+            speak('Voice not available');
+            return;
+        }
+        
+        if (state.isListening) {
+            stopListening();
+            return;
+        }
+        
+        speechSynthesis.cancel();
+        try {
+            state.recognition.start();
+            vibrate([50]);
+        } catch (e) {
+            try {
+                state.recognition.stop();
+                setTimeout(() => state.recognition.start(), 100);
+            } catch (e2) {}
+        }
+    }
+    
+    function stopListening() {
+        try {
+            state.recognition?.stop();
+        } catch (e) {}
+        state.isListening = false;
+        updateMicButton(false);
+    }
+    
+    function updateMicButton(listening) {
+        const btn = document.getElementById('btnMic');
+        if (listening) {
+            btn.classList.add('listening');
+            btn.querySelector('span:last-child').textContent = 'Listening...';
+        } else {
+            btn.classList.remove('listening');
+            btn.querySelector('span:last-child').textContent = 'Speak';
+        }
+    }
+    
+    function handleVoiceCommand(text) {
+        vibrate([30]);
+        
+        if (text.includes('start') || text.includes('begin')) {
+            if (document.getElementById('help').classList.contains('visible')) {
+                hideHelp();
+                return;
+            }
+        }
+        
+        if (text.includes('stop') || text.includes('pause') || text.includes('quiet')) {
+            state.isPaused = true;
+            speak('Alerts paused. Say resume to continue.', true);
+            return;
+        }
+        
+        if (text.includes('resume') || text.includes('continue')) {
+            state.isPaused = false;
+            speak('Alerts resumed.', true);
+            return;
+        }
+        
+        if (text.includes('around') || text.includes('describe') || text.includes('what')) {
+            describeArea();
+            return;
+        }
+        
+        if (text.includes('safe') || text.includes('clear') || text.includes('walk')) {
+            checkSafety();
+            return;
+        }
+        
+        if (text.includes('left')) {
+            speakDirection('left');
+            return;
+        }
+        
+        if (text.includes('right')) {
+            speakDirection('right');
+            return;
+        }
+        
+        if (text.includes('scan') || text.includes('stair') || text.includes('door')) {
+            triggerAIScan();
+            return;
+        }
+        
+        if (text.includes('help')) {
+            showHelp();
+            return;
+        }
+        
+        speak('Say: what is around, is it safe, left, right, or scan.', true);
+    }
+    
+    // ========== AI ANALYSIS ==========
+    // mode: 'background' = fast model, low-res (auto scans)
+    // mode: 'detailed'   = accurate model, high-res (user-triggered)
+    async function analyzeWithAI(mode = 'background') {
+        try {
+            const canvas = document.createElement('canvas');
+            const isDetailed = mode === 'detailed';
+            canvas.width = isDetailed ? Math.min(state.video.videoWidth || 960, 1280) : Math.min(state.video.videoWidth || 960, 960);
+            canvas.height = isDetailed ? Math.min(state.video.videoHeight || 720, 960) : Math.min(state.video.videoHeight || 720, 720);
+            const ctx = canvas.getContext('2d');
+            // Fill black first — prevents transparent canvas falling back to PNG on iOS
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(state.video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg', isDetailed ? 0.9 : 0.75).split(',')[1];
+
+            // Pass what local model already found so AI focuses on what it missed
+            const context = state.localDetections
+                .filter(d => d.confidence >= CONFIG.HIGH_CONFIDENCE)
+                .slice(0, 5)
+                .map(d => `${d.name} ${(d.distance * 3.28084).toFixed(0)}ft ${d.position}`)
+                .join(', ');
+
+            // Race both providers — use whichever responds first
+            const result = await Promise.any([
+                fetchAI(imageData, 'openai', mode, context),
+                fetchAI(imageData, 'anthropic', mode, context)
+            ]).catch(() => null);
+            return result || null;
+        } catch (e) {
+            console.error('AI error:', e);
+            return null;
+        }
+    }
+
+    let _aiFailCount = 0;
+    let _aiBackoffUntil = 0;
+
+    async function fetchAI(imageData, provider, mode = 'background', context = '') {
+        // Back off if worker keeps failing (prevents hammering a broken endpoint)
+        if (Date.now() < _aiBackoffUntil) return null;
+
+        try {
+            const response = await fetch(CONFIG.WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData, provider, mode, context })
+            });
+            if (!response.ok) {
+                _aiFailCount++;
+                // Exponential backoff: 10s, 20s, 40s, 60s max
+                _aiBackoffUntil = Date.now() + Math.min(10000 * Math.pow(2, _aiFailCount - 1), 60000);
+                console.warn(`AI ${provider}: ${response.status}, backing off ${Math.min(10 * Math.pow(2, _aiFailCount - 1), 60)}s`);
+                return null;
+            }
+            _aiFailCount = 0;  // reset on success
+            const data = await response.json();
+            return data.result || null;
+        } catch (e) {
+            _aiFailCount++;
+            _aiBackoffUntil = Date.now() + Math.min(10000 * Math.pow(2, _aiFailCount - 1), 60000);
+            return null;
+        }
+    }
+    
+    // ========== LOCAL DETECTION ==========
+    // Known real-world heights (meters) for COCO-SSD classes — used for distance triangulation
+    const KNOWN_HEIGHTS = {
+        person: 1.7, bicycle: 1.0, car: 1.5, motorcycle: 1.1, bus: 3.0, truck: 3.0,
+        dog: 0.5, cat: 0.3, horse: 1.6, chair: 0.9, couch: 0.85, bed: 0.6,
+        'dining table': 0.75, toilet: 0.4, refrigerator: 1.7, 'fire hydrant': 0.6,
+        'stop sign': 2.1, 'parking meter': 1.2, bench: 0.85, backpack: 0.5,
+        suitcase: 0.7, 'potted plant': 0.5, 'sports ball': 0.22, skateboard: 0.1
+    };
+
+    // Estimate camera vertical FOV from video dimensions (default ~55° for most phones)
+    function getCameraFOV() { return 55 * (Math.PI / 180); }
+
+    // Distance = (realHeight * imageHeight) / (2 * bboxHeight * tan(FOV/2))
+    function estimateDistance(className, bboxHeight, imageHeight) {
+        const realH = KNOWN_HEIGHTS[className];
+        if (!realH || bboxHeight < 5) return null;  // unknown class or too small
+        const fov = getCameraFOV();
+        const d = (realH * imageHeight) / (2 * bboxHeight * Math.tan(fov / 2));
+        return Math.max(0.3, Math.min(d, 8.0));  // clamp 0.3m – 8m
+    }
+
+    // Auto-calibrate depth model using COCO-SSD detections.
+    // When we see a known-size object and can estimate real distance via triangulation,
+    // we learn the mapping: depth_value ↔ real_meters. This lets us convert relative
+    // depth (0-255) into approximate real distances for walls/surfaces.
+    function updateDepthCalibration(detections) {
+        if (!state.depthHistory.length) return;
+        const latest = state.depthHistory[state.depthHistory.length - 1];
+
+        for (const det of detections) {
+            // Only calibrate from ahead-facing objects with known sizes and good confidence
+            if (det.position !== 'ahead' || det.confidence < 0.7) continue;
+            if (!KNOWN_HEIGHTS[det.name]) continue;
+            if (det.distance > 5.0 || det.distance < 0.5) continue;
+
+            // Use the center depth value since the object is ahead
+            const depthVal = latest.c;
+            if (depthVal < 50 || depthVal > 240) continue;  // ignore extreme values
+
+            const cal = { depthVal, realMeters: det.distance, timestamp: Date.now() };
+
+            if (!state.depthCalibration) {
+                state.depthCalibration = cal;
+            } else {
+                // EMA: blend new calibration with old (alpha=0.3 for responsiveness)
+                state.depthCalibration.depthVal = state.depthCalibration.depthVal * 0.7 + depthVal * 0.3;
+                state.depthCalibration.realMeters = state.depthCalibration.realMeters * 0.7 + det.distance * 0.3;
+                state.depthCalibration.timestamp = Date.now();
+            }
+            console.log(`Depth calibration: val=${state.depthCalibration.depthVal.toFixed(0)} ≈ ${(state.depthCalibration.realMeters * 3.28084).toFixed(1)}ft`);
+            break;  // one calibration per cycle
+        }
+    }
+
+    // Convert a raw depth value (0-255) to approximate meters using calibration.
+    // Depth-Anything: higher value = closer. Relationship: rawValue ∝ 1/distance.
+    // So: distance = k / rawValue, where k = cal.depthVal * cal.realMeters.
+    function depthToMeters(depthVal) {
+        if (!state.depthCalibration) return null;
+        const cal = state.depthCalibration;
+        if (depthVal < 10) return 10;  // very far
+        const k = cal.depthVal * cal.realMeters;
+        return Math.max(0.2, k / depthVal);
+    }
+
+    async function detectLocal() {
+        if (!state.model || !state.video) return [];
+
+        try {
+            const predictions = await state.model.detect(state.video);
+
+            const vw = state.video.videoWidth || 1;
+            const vh = state.video.videoHeight || 1;
+            return predictions.map(p => {
+                const cx = (p.bbox[0] + p.bbox[2] / 2) / vw;
+                const cy = (p.bbox[1] + p.bbox[3] / 2) / vh;
+
+                // Position
+                let position = 'ahead';
+                if (cx < 0.35) position = 'left';
+                else if (cx > 0.65) position = 'right';
+
+                // Distance: use known-object triangulation if available,
+                // fall back to crude bbox-size estimate
+                let distance = estimateDistance(p.class, p.bbox[3], vh);
+                if (distance === null) {
+                    // Fallback for unknown objects
+                    const size = Math.max(p.bbox[2], p.bbox[3]) / Math.max(vw, vh);
+                    if (size > 0.6) distance = 0.5;
+                    else if (size > 0.45) distance = 1.0;
+                    else if (size > 0.3) distance = 1.5;
+                    else if (size > 0.2) distance = 2.0;
+                    else if (size > 0.1) distance = 3.0;
+                    else distance = 4.0;
+                }
+
+                // Is it in the walking path?
+                const inPath = cx > 0.25 && cx < 0.75 && cy > 0.3;
+
+                // Danger level
+                let danger = 'low';
+                if (CONFIG.CRITICAL.includes(p.class)) danger = 'critical';
+                else if (CONFIG.OBSTACLES.includes(p.class)) danger = 'obstacle';
+
+                return {
+                    name: p.class,
+                    position: position,
+                    distance: distance,
+                    inPath: inPath,
+                    danger: danger,
+                    confidence: p.score
+                };
+            }).filter(d => d.confidence >= CONFIG.HIGH_CONFIDENCE);
+        } catch (e) {
+            return [];
+        }
+    }
+    
+    // ========== HELPER: Get display name based on confidence ==========
+    function getDisplayName(detection) {
+        if (detection.confidence >= CONFIG.HIGH_CONFIDENCE) {
+            return detection.name;
+        } else {
+            return 'obstacle';
+        }
+    }
+
+    // ========== PARSE AI RESPONSE INTO STRUCTURED HAZARD ==========
+    function parseAIResult(text) {
+        const lower = text.toLowerCase();
+
+        // Path clear — reset AI hazard
+        if (/path\s*clear|no\s*hazard|all\s*clear|nothing|safe\s*to\s*proceed/.test(lower)) {
+            return { level: 'clear' };
+        }
+
+        // DANGER: stairs / drop-offs (falling hazard — highest priority)
+        if (/stair|step\s*down|steps\s*down|drop.?off|ledge|descend|going\s*down/.test(lower)) {
+            return { level: 'danger', key: 'stairs', label: 'STAIRS', uiDetail: 'Stop — stairs or drop-off',
+                speak: 'Stairs ahead. Stop.' };
+        }
+
+        // DANGER: moving vehicles / cyclists
+        if (/\b(car|vehicle|truck|bus|cyclist|bicycle|motorbike|motorcycle)\b.*approach|moving|coming/.test(lower) ||
+            /approach.*\b(car|vehicle|truck|bus|cyclist)\b/.test(lower)) {
+            return { level: 'danger', key: 'vehicle', label: 'VEHICLE', uiDetail: 'Moving vehicle nearby',
+                speak: 'Vehicle approaching! Be careful!' };
+        }
+
+        // WARNING: wall / dead end / blocked path
+        if (/wall|dead.?end|blocked|barrier|partition|fence|closed\s*off|no\s*through|path\s*end|surface\s*ahead|end\s*of\s*(path|corridor|hall|room)|solid\s*surface|obstruct|no\s*path|nowhere\s*to\s*go|path\s*(is\s*)?(block|obstruct|close)|walking\s*(into|toward)\s*(a\s*)?(wall|surface|struct)/.test(lower)) {
+            return { level: 'warning', key: 'wall', label: 'WALL/BLOCKED', uiDetail: 'Wall or blocked path ahead',
+                speak: 'Wall ahead. Slow down.' };
+        }
+
+        // WARNING: step up / curb / raised surface
+        if (/step\s*up|curb|kerb|raised|bump|threshold/.test(lower)) {
+            return { level: 'warning', key: 'step_up', label: 'STEP UP', uiDetail: 'Step or curb ahead',
+                speak: 'Step up ahead.' };
+        }
+
+        // WARNING: wet / slippery
+        if (/wet|slippery|icy|ice|puddle|spill|damp/.test(lower)) {
+            return { level: 'warning', key: 'wet', label: 'WET FLOOR', uiDetail: 'Slippery surface',
+                speak: 'Caution — wet or slippery floor.' };
+        }
+
+        // WARNING: narrow passage
+        if (/narrow|tight\s*gap|squeeze|low\s*ceiling|low\s*beam|head.?height|duck/.test(lower)) {
+            return { level: 'warning', key: 'narrow', label: 'NARROW', uiDetail: 'Narrow or low clearance',
+                speak: 'Narrow passage or low obstacle ahead.' };
+        }
+
+        // INFO: door (open doors are navigable — just announce)
+        if (/door|doorway|entrance|exit|gateway|gate/.test(lower)) {
+            return { level: 'info', key: 'door', label: 'DOOR', uiDetail: 'Door or entrance ahead',
+                speak: 'Door ahead.' };
+        }
+
+        // Anything else the AI flags as a hazard
+        if (/hazard|caution|careful|danger|obstacle|object|block/.test(lower)) {
+            const shortText = text.length < 80 ? text : 'Hazard detected ahead.';
+            return { level: 'warning', key: 'hazard', label: 'HAZARD', uiDetail: shortText,
+                speak: shortText };
+        }
+
+        return { level: 'info', key: 'ai_note', label: 'AI', uiDetail: text,
+            speak: text.length < 80 ? text : '' };
+    }
+    
+    // ========== DEPTH ESTIMATION ==========
+    // Strategy: try LiDAR via WebXR first (iPhone 12 Pro+), fall back to Transformers.js model.
+    // LiDAR gives real hardware depth at 60fps with zero download — far superior on Pro iPhones.
+
+    async function initDepthModel() {
+        const badge = document.getElementById('aiBadge');
+        if (badge) badge.textContent = 'Starting depth sensor…';
+
+        // ── ATTEMPT 1: WebXR Depth API (LiDAR on iPhone Pro, no model download) ──────────
+        if (navigator.xr) {
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (supported) {
+                    // Request AR session with depth sensing
+                    const session = await navigator.xr.requestSession('immersive-ar', {
+                        requiredFeatures: ['depth-sensing'],
+                        depthSensing: {
+                            usagePreference: ['cpu-optimized'],
+                            dataFormatPreference: ['luminance-alpha']
+                        }
+                    });
+
+                    state.xrSession = session;
+                    state.xrDepthActive = false; // set true once we get first frame
+
+                    const gl = document.createElement('canvas').getContext('webgl2', { xrCompatible: true })
+                            || document.createElement('canvas').getContext('webgl', { xrCompatible: true });
+
+                    if (gl) {
+                        await gl.makeXRCompatible?.();
+                        const layer = new XRWebGLLayer(session, gl);
+                        session.updateRenderState({ baseLayer: layer });
+
+                        const refSpace = await session.requestReferenceSpace('local');
+
+                        session.requestAnimationFrame(function onXRFrame(t, frame) {
+                            if (!state.isRunning) { session.end(); return; }
+                            session.requestAnimationFrame(onXRFrame);
+
+                            const depthInfo = frame.getDepthInformation?.(frame.getViewerPose(refSpace)?.views[0]);
+                            if (!depthInfo) return;
+
+                            state.xrDepthActive = true;
+                            const w = depthInfo.width, h = depthInfo.height;
+
+                            // Sample center, left, right strips (metres)
+                            let cSum = 0, cN = 0, lSum = 0, lN = 0, rSum = 0, rN = 0;
+                            const yStart = Math.floor(h * 0.2), yEnd = Math.floor(h * 0.8);
+                            for (let y = yStart; y < yEnd; y++) {
+                                for (let x = 0; x < w; x++) {
+                                    const d = depthInfo.getDepthInMeters(x / w, y / h);
+                                    if (!isFinite(d) || d <= 0) continue;
+                                    const fx = x / w;
+                                    if (fx > 0.30 && fx < 0.70) { cSum += d; cN++; }
+                                    else if (fx < 0.22)          { lSum += d; lN++; }
+                                    else if (fx > 0.78)          { rSum += d; rN++; }
+                                }
+                            }
+
+                            const c = cN > 0 ? cSum / cN : 5;
+                            const l = lN > 0 ? lSum / lN : 5;
+                            const r = rN > 0 ? rSum / rN : 5;
+
+                            state.depthHistory.push({ c, l, r, lidar: true });
+                            if (state.depthHistory.length > 6) state.depthHistory.shift();
+
+                            const hazard = computeLiDARHazard(c, l, r);
+                            if (hazard) {
+                                const ttl = hazard.level === 'danger' ? 1200 : 900;
+                                if (!state.depthHazard || hazard.level === 'danger') {
+                                    state.depthHazard = { ...hazard, expiry: Date.now() + ttl };
+                                    speakAlert(hazard.key, hazard.speak, hazard.level === 'danger' ? 3 : 2);
+                                    playAlertSound('ahead', hazard.level);
+                                    vibrateAlert(hazard.level);
+                                }
+                            }
+                        });
+
+                        // Give it 3s to get first frame; if no depth data, fall through to model
+                        await new Promise(r => setTimeout(r, 3000));
+                    }
+
+                    if (state.xrDepthActive) {
+                        if (badge) badge.textContent = 'AI + LiDAR Active';
+                        console.log('WebXR LiDAR depth active');
+                        return; // success — don't load Transformers.js
+                    } else {
+                        // Session started but no depth frames — device lacks LiDAR
+                        session.end().catch(() => {});
+                        state.xrSession = null;
+                        console.warn('WebXR AR started but no depth data — device may lack LiDAR');
+                    }
+                }
+            } catch (e) {
+                console.warn('WebXR depth not available:', e.message || e);
+            }
+        }
+
+        // ── ATTEMPT 2: Transformers.js Depth-Anything model (all devices) ────────────────
+        if (badge) badge.textContent = 'Loading depth model…';
+
+        const loaded = await new Promise(resolve => {
+            if (window.__txPipeline) { resolve(true); return; }
+            const onOk   = () => { cleanup(); resolve(true); };
+            const onFail = () => { cleanup(); resolve(false); };
+            const timer  = setTimeout(() => { cleanup(); resolve(false); }, 30000);
+            const cleanup = () => {
+                window.removeEventListener('tx-ready',  onOk);
+                window.removeEventListener('tx-failed', onFail);
+                clearTimeout(timer);
+            };
+            window.addEventListener('tx-ready',  onOk,  { once: true });
+            window.addEventListener('tx-failed', onFail, { once: true });
+        });
+
+        if (!loaded || !window.__txPipeline) {
+            console.error('Depth: Transformers.js did not load');
+            if (badge) badge.textContent = 'AI Active';
+            return;
+        }
+
+        try {
+            const env = window.__txEnv;
+            if (env) env.allowLocalModels = false;
+            if (badge) badge.textContent = 'Downloading depth model…';
+            state.depthPipeline = await window.__txPipeline(
+                'depth-estimation', 'Xenova/depth-anything-small-hf', { quantized: true }
+            );
+            if (badge) badge.textContent = 'AI + Depth Active';
+            console.log('Transformers.js depth model ready');
+        } catch (e) {
+            console.error('Depth model failed:', e.message || e);
+            if (badge) badge.textContent = 'AI Active';
+        }
+    }
+
+    // LiDAR hazard: distances are real metres — use absolute thresholds
+    function computeLiDARHazard(c, l, r) {
+        const hist = state.depthHistory;
+        if (hist.length < 2) return null;
+
+        // Absolute distance thresholds (real metres from LiDAR)
+        const ft = (c * 3.28084).toFixed(1);
+        if (c <= 0.4) return { level: 'danger', key: 'lidar_critical',
+            label: 'STOP', speak: 'Stop now', uiDetail: `${ft} ft ahead`, fromDepth: true };
+        if (c <= 1.0) return { level: 'danger', key: 'lidar_close',
+            label: 'OBSTACLE CLOSE', speak: 'Stop', uiDetail: `${ft} ft ahead`, fromDepth: true };
+        if (c <= 2.0) return { level: 'warning', key: 'lidar_near',
+            label: 'OBSTACLE AHEAD', speak: 'Slow', uiDetail: `${ft} ft ahead`, fromDepth: true };
+
+        // Approaching: getting closer by ≥8cm since last reading, within 3m
+        const prev = hist[hist.length - 2];
+        if (prev.lidar && c < prev.c - 0.08 && c < 3.0) {
+            return { level: 'warning', key: 'lidar_approach',
+                label: 'APPROACHING', speak: 'Ahead', uiDetail: `Approaching ${ft} ft`, fromDepth: true };
+        }
+
+        return null;
+    }
+
+    async function runDepthDetection() {
+        // LiDAR runs via XR animation frame — nothing to do here
+        if (state.xrDepthActive) return null;
+        if (!state.depthPipeline || !state.video || state.video.videoWidth === 0) return null;
+
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            canvas.getContext('2d').drawImage(state.video, 0, 0, 256, 256);
+
+            const { depth } = await state.depthPipeline(canvas.toDataURL('image/jpeg', 0.6));
+            const data = depth.data, w = depth.width, h = depth.height, ch = depth.channels || 1;
+
+            let cSum = 0, cN = 0, lSum = 0, lN = 0, rSum = 0, rN = 0;
+            for (let y = Math.floor(h * 0.15); y < Math.floor(h * 0.85); y++) {
+                for (let x = 0; x < w; x++) {
+                    const v = data[(y * w + x) * ch];
+                    const fx = x / w;
+                    if (fx > 0.30 && fx < 0.70) { cSum += v; cN++; }
+                    else if (fx < 0.22)          { lSum += v; lN++; }
+                    else if (fx > 0.78)          { rSum += v; rN++; }
+                }
+            }
+
+            const c = cN > 0 ? cSum / cN : 128;
+            const l = lN > 0 ? lSum / lN : 128;
+            const r = rN > 0 ? rSum / rN : 128;
+
+            state.depthHistory.push({ c, l, r });
+            if (state.depthHistory.length > 6) state.depthHistory.shift();
+
+            return computeDepthHazard(c, l, r);
+        } catch (e) {
+            console.warn('Depth scan error:', e);
+            return null;
+        }
+    }
+
+    // Depth hazard detection — uses calibrated meters when available, raw values as fallback.
+    function computeDepthHazard(c, l, r) {
+        const hist = state.depthHistory;
+        if (hist.length < 2) return null;
+
+        // ── APPROACH RATE: works without calibration ──────────────────────────────
+        // Only triggers if depth is rising FAST and CONSISTENTLY across 3+ frames.
+        // Higher thresholds prevent false triggers from camera exposure drift.
+        if (hist.length >= 4) {
+            const h0 = hist[hist.length - 4];  // 3 frames ago
+            const h1 = hist[hist.length - 3];
+            const h2 = hist[hist.length - 2];
+            // current = c (already defined above)
+            const avgRate = (c - h0.c) / 3;
+            // Require each consecutive pair to be rising (not just endpoints)
+            const rising = (h1.c > h0.c + 1) && (h2.c > h1.c + 1) && (c > h2.c + 1);
+            if (rising && avgRate > 15) {
+                return { level: 'danger', key: 'depth_approaching_fast',
+                    label: 'APPROACHING FAST', speak: 'Stop',
+                    uiDetail: 'Something approaching quickly', fromDepth: true };
+            }
+            if (rising && avgRate > 8) {
+                return { level: 'warning', key: 'depth_approaching',
+                    label: 'APPROACHING', speak: 'Slow',
+                    uiDetail: 'Something getting closer', fromDepth: true };
+            }
+        }
+
+        // ── CALIBRATED DISTANCE (when we have a reference from COCO-SSD) ─────────
+        const cMeters = depthToMeters(c);
+        if (cMeters !== null) {
+            const cFt = (cMeters * 3.28084).toFixed(1);
+            if (cMeters < 1.0) {
+                return { level: 'danger', key: 'depth_close',
+                    label: 'VERY CLOSE', speak: 'Stop',
+                    uiDetail: `${cFt} ft ahead`, fromDepth: true };
+            }
+            if (cMeters < 1.8) {
+                return { level: 'danger', key: 'depth_danger',
+                    label: 'CLOSE', speak: 'Stop',
+                    uiDetail: `${cFt} ft ahead`, fromDepth: true };
+            }
+            if (cMeters < 3.0) {
+                return { level: 'warning', key: 'depth_warn',
+                    label: 'OBSTACLE AHEAD', speak: 'Slow',
+                    uiDetail: `${cFt} ft ahead`, fromDepth: true };
+            }
+            return null;
+        }
+
+        // ── UNCALIBRATED FALLBACK (raw 0-255 values) ─────────────────────────────
+        // Wall at 3ft reads ~160-190, at 5ft reads ~120-140, at 8ft+ reads ~80-100.
+        const scene = (c + l + r) / 3;
+        if (scene < 1) return null;
+
+        // Center zone (catches walls head-on)
+        // Values vary wildly per phone/lighting — use aggressive thresholds
+        if (c > 110) {
+            return { level: 'danger', key: 'depth_close',
+                label: 'WALL/OBSTACLE', speak: 'Stop',
+                uiDetail: `Close ahead (c:${c.toFixed(0)})`, fromDepth: true };
+        }
+        if (c > 85) {
+            return { level: 'warning', key: 'depth_near',
+                label: 'SURFACE AHEAD', speak: 'Slow',
+                uiDetail: `Surface ahead (c:${c.toFixed(0)})`, fromDepth: true };
+        }
+
+
+        // Center deviation (isolated obstacles)
+        const cRatio = c / scene;
+        const sideAvg = ((l + r) / 2) / scene;
+        const deviation = cRatio - sideAvg;
+
+        if (deviation > 0.35) {
+            return { level: 'danger', key: 'depth_center',
+                label: 'OBSTACLE', speak: 'Stop',
+                uiDetail: 'Obstacle directly ahead', fromDepth: true };
+        }
+        if (deviation > 0.20) {
+            return { level: 'warning', key: 'depth_center_warn',
+                label: 'OBSTACLE AHEAD', speak: 'Slow',
+                uiDetail: 'Obstacle in path', fromDepth: true };
+        }
+
+        return null;
+    }
+
+    // ========== FAST WALL DETECTOR (no ML — pure pixel math, <5ms) ==========
+    // A wall/surface close to the camera fills the frame with uniform color.
+    // Open space has edges, texture variation, multiple colors.
+    // We measure the variance of pixel brightness in the center strip —
+    // low variance = flat surface = wall. Runs every loop cycle instantly.
+    function fastWallCheck() {
+        if (!state.video || state.video.videoWidth === 0) return null;
+
+        // Reuse a tiny canvas — 64x48 is plenty for variance calculation
+        if (!state._wallCanvas) {
+            state._wallCanvas = document.createElement('canvas');
+            state._wallCanvas.width = 64;
+            state._wallCanvas.height = 48;
+            state._wallCtx = state._wallCanvas.getContext('2d', { willReadFrequently: true });
+        }
+
+        try {
+            const ctx = state._wallCtx;
+            ctx.drawImage(state.video, 0, 0, 64, 48);
+            const img = ctx.getImageData(0, 0, 64, 48);
+            const d = img.data;
+
+            // Sample center strip (middle 50% width, middle 60% height)
+            let sum = 0, sumSq = 0, n = 0;
+            let edgeCount = 0;
+            const xStart = 16, xEnd = 48;  // center 50%
+            const yStart = 10, yEnd = 38;  // center 60%
+
+            for (let y = yStart; y < yEnd; y++) {
+                for (let x = xStart; x < xEnd; x++) {
+                    const i = (y * 64 + x) * 4;
+                    const brightness = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+                    sum += brightness;
+                    sumSq += brightness * brightness;
+                    n++;
+
+                    // Count edges: big brightness jump to neighbor = edge
+                    if (x > xStart) {
+                        const prev = d[i-4] * 0.299 + d[i-3] * 0.587 + d[i-2] * 0.114;
+                        if (Math.abs(brightness - prev) > 30) edgeCount++;
+                    }
+                }
+            }
+
+            const mean = sum / n;
+            const variance = (sumSq / n) - (mean * mean);
+            const edgeRatio = edgeCount / n;
+
+            // Low variance + few edges = flat uniform surface = wall
+            // Typical values: wall variance 50-200, open room 500-2000+
+            // Edge ratio: wall <0.05, open space >0.15
+            if (variance < 150 && edgeRatio < 0.06) {
+                return { level: 'danger', key: 'wall_fast',
+                    label: 'WALL', speak: 'Stop',
+                    uiDetail: `Wall detected (v:${variance.toFixed(0)} e:${edgeRatio.toFixed(2)})`,
+                    fromDepth: true };
+            }
+            if (variance < 350 && edgeRatio < 0.10) {
+                return { level: 'warning', key: 'wall_fast',
+                    label: 'SURFACE AHEAD', speak: 'Slow',
+                    uiDetail: `Surface ahead (v:${variance.toFixed(0)} e:${edgeRatio.toFixed(2)})`,
+                    fromDepth: true };
+            }
+
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // ========== FAST HAZARD LOOP (50ms — SOLE owner of UI + speech) ==========
+    // Main loop only sets data (detections, hazards). This loop reads that data
+    // and controls ALL visual + audio output. No other code touches UI.
+    let _fastLoopRunning = false;
+    let _lastFastThreat = 'safe';
+    let _lastFastSpeech = 0;
+
+    function fastHazardLoop() {
+        if (_fastLoopRunning) return;
+        _fastLoopRunning = true;
+
+        if (!state.isRunning || !state.video || state.video.videoWidth === 0) {
+            _fastLoopRunning = false;
+            setTimeout(fastHazardLoop, 100);
+            return;
+        }
+
+        const now = Date.now();
+        let threat = 'safe';
+        let label = '';
+        let detail = '';
+        let pos = 'ahead';
+
+        // 1. Pixel-variance wall check (<3ms)
+        const wallResult = fastWallCheck();
+        if (wallResult) {
+            state.depthHazard = { ...wallResult, expiry: now + 800 };
+            threat = wallResult.level;
+            label = wallResult.label;
+            detail = wallResult.uiDetail;
+        }
+
+        // 2. Cached depth values (<1ms)
+        if (threat === 'safe' && state.depthHistory.length >= 2) {
+            const last = state.depthHistory[state.depthHistory.length - 1];
+            if (!last.lidar) {
+                const dr = computeDepthHazard(last.c, last.l, last.r);
+                if (dr) {
+                    state.depthHazard = { ...dr, expiry: now + 800 };
+                    threat = dr.level; label = dr.label; detail = dr.uiDetail;
+                }
+            }
+        }
+
+        // 3. Active hazards from depth model + AI cloud
+        if (threat === 'safe') {
+            for (const hz of [state.depthHazard, state.aiHazard]) {
+                if (!hz || now > hz.expiry) continue;
+                if (hz.level === 'danger') { threat = 'danger'; label = hz.label; detail = hz.uiDetail; break; }
+                if (hz.level === 'warning') { threat = 'warning'; label = hz.label; detail = hz.uiDetail; }
+            }
+        }
+
+        // 4. COCO-SSD results from main loop
+        if (threat === 'safe' && state._mainThreat && state._mainThreat !== 'safe' && state.currentObstacle) {
+            threat = state._mainThreat;
+            const ob = state.currentObstacle;
+            label = ob.displayLabel || ob.name || 'Obstacle';
+            detail = ob.uiDetail || `${(ob.distance * 3.28084).toFixed(0)} ft ${ob.position}`;
+            pos = ob.position || 'ahead';
+        }
+
+        // ── UI UPDATE (every 50ms — always in sync) ──
+        if (threat === 'danger') {
+            updateUI('danger', '!', `STOP! ${label}!`, detail);
+            updateDirections(pos, 'danger');
+        } else if (threat === 'warning') {
+            updateUI('warning', '!', `${label} ahead`, detail);
+            updateDirections(pos, 'warning');
+        } else {
+            updateUI('safe', 'OK', 'Path Clear', 'Walking is safe');
+            updateDirections(null, 'safe');
+        }
+
+        // ── AUDIO (only on state change or sustained danger) ──
+        if (!state.isPaused) {
+            const changed = threat !== _lastFastThreat;
+
+            if (threat === 'danger') {
+                if (changed || now - _lastFastSpeech > 2500) {
+                    speakAlert('fast_danger', `Stop. ${label}.`, 3);
+                    vibrateAlert('danger');
+                    playAlertSound(pos, 'danger');
+                    _lastFastSpeech = now;
+                }
+            } else if (threat === 'warning' && changed) {
+                speakAlert('fast_warning', `Caution. ${label}.`, 2);
+                vibrateAlert('warning');
+                playAlertSound(pos, 'warning');
+                _lastFastSpeech = now;
+            }
+        }
+
+        _lastFastThreat = threat;
+        state.currentStatus = threat;
+
+        _fastLoopRunning = false;
+        setTimeout(fastHazardLoop, 50);
+    }
+
+    // ========== MAIN PROTECTION LOOP ==========
+    // Smoothing: escalate instantly, require 2 consecutive safe readings to de-escalate.
+    let _threatHistory = [];
+    const SAFE_CONFIRM_COUNT = 2;
+    let _loopRunning = false;  // prevents multiple protectionLoop instances
+
+    async function protectionLoop() {
+        if (_loopRunning) return;
+        _loopRunning = true;
+
+        if (!state.isRunning) {
+            _loopRunning = false;
+            setTimeout(protectionLoop, 500);
+            return;
+        }
+
+      try {
+        const now = Date.now();
+
+        const t0 = performance.now();
+        state.localDetections = await detectLocal();
+        const detectMs = Math.round(performance.now() - t0);
+
+        // Auto-calibrate depth from detected objects
+        updateDepthCalibration(state.localDetections);
+
+        // Find most dangerous local obstacle
+        let mostDangerous = null;
+        let rawThreat = 'safe';
+
+        for (const det of state.localDetections) {
+            if (!det.inPath) continue;
+
+            if (det.distance < CONFIG.DANGER_ZONE) {
+                if (!mostDangerous || det.distance < mostDangerous.distance) {
+                    mostDangerous = det;
+                    rawThreat = 'danger';
+                }
+            } else if (det.distance < CONFIG.WARNING_ZONE && rawThreat !== 'danger') {
+                if (!mostDangerous || det.distance < mostDangerous.distance) {
+                    mostDangerous = det;
+                    rawThreat = 'warning';
+                }
+            }
+        }
+
+        // Temporal smoothing: escalate instantly, de-escalate after 2 consecutive safe readings.
+        _threatHistory.push(rawThreat);
+        if (_threatHistory.length > 5) _threatHistory.shift();
+
+        let highestThreat;
+        if (rawThreat === 'danger' || rawThreat === 'warning') {
+            highestThreat = rawThreat;  // escalate immediately — no delay
+        } else {
+            // Only go to safe if last 3 readings were ALL safe
+            const recent = _threatHistory.slice(-SAFE_CONFIRM_COUNT);
+            const allSafe = recent.length >= SAFE_CONFIRM_COUNT && recent.every(t => t === 'safe');
+            highestThreat = allSafe ? 'safe' : (state.currentStatus || 'safe');
+        }
+
+        // MERGE depth + AI hazards into threat level BEFORE UI update.
+        // Check hazards exist and haven't expired. Order: merge first, expire after.
+        for (const hz of [state.depthHazard, state.aiHazard]) {
+            if (!hz || now > hz.expiry) continue;
+            if (hz.level === 'danger' && highestThreat !== 'danger') {
+                highestThreat = 'danger';
+                if (!mostDangerous) {
+                    mostDangerous = { name: hz.key, position: 'ahead', distance: 0.8,
+                        inPath: true, confidence: 1.0, danger: 'obstacle', fromAI: true,
+                        displayLabel: hz.label, uiDetail: hz.uiDetail };
+                }
+            } else if (hz.level === 'warning' && highestThreat === 'safe') {
+                highestThreat = 'warning';
+                if (!mostDangerous) {
+                    mostDangerous = { name: hz.key, position: 'ahead', distance: 1.5,
+                        inPath: true, confidence: 1.0, danger: 'obstacle', fromAI: true,
+                        displayLabel: hz.label, uiDetail: hz.uiDetail };
+                }
+            }
+        }
+
+        // EXPIRE stale hazards (after merge, so they're used one last time)
+        if (state.aiHazard && now > state.aiHazard.expiry) state.aiHazard = null;
+        if (state.depthHazard && now > state.depthHazard.expiry) state.depthHazard = null;
+
+        // Debug info
+        const dbg = document.getElementById('debugInfo');
+        if (dbg) {
+            const objs = state.localDetections.map(d =>
+                `${d.name}(${(d.distance*3.28084).toFixed(0)}ft ${d.position})`
+            ).join(', ') || 'none';
+            const depthStatus = state.xrDepthActive ? 'LiDAR' : state.depthPipeline ? 'model' : 'loading...';
+            const depthHist = state.depthHistory.length > 0 ? state.depthHistory[state.depthHistory.length-1] : null;
+            const depthStr = depthHist ? `c:${depthHist.c.toFixed?.(0) ?? depthHist.c}` : 'no data';
+            const calStr = state.depthCalibration
+                ? `cal:${depthToMeters(depthHist?.c || 0)?.toFixed(1) ?? '?'}m`
+                : 'uncal';
+            const dhz = state.depthHazard ? state.depthHazard.level[0] : '-';
+            dbg.textContent = `det:${detectMs}ms ${state.localDetections.length}obj | ${depthStatus} ${depthStr} ${calStr} dh:${dhz} | ${rawThreat}→${highestThreat}`;
+        }
+
+        // DEPTH SCAN — fire async to refresh cache (no UI/speech — fast loop handles that)
+        if (state.depthPipeline && now - state.lastDepthScan > CONFIG.DEPTH_SCAN_INTERVAL) {
+            state.lastDepthScan = now;
+            runDepthDetection().then(hazard => {
+                if (!hazard) return;
+                const ttl = hazard.level === 'danger' ? 1200 : 900;
+                state.depthHazard = { ...hazard, expiry: Date.now() + ttl };
+            });
+        }
+
+        // AI SCAN — fire async, set hazard (no UI/speech — fast loop handles that)
+        if (now - state.lastAIScan > CONFIG.AI_SCAN_INTERVAL && !state.isPaused && !state.aiScanInProgress) {
+            state.lastAIScan = now;
+            state.aiScanInProgress = true;
+
+            analyzeWithAI('background').then(result => {
+                state.aiScanInProgress = false;
+                if (!result) return;
+                state.aiResult = result;
+                const hazard = parseAIResult(result);
+
+                if (hazard.level === 'clear') {
+                    state.aiHazard = null;
+                    return;
+                }
+
+                const ttl = hazard.level === 'danger' ? 4000 : 3000;
+                state.aiHazard = { ...hazard, expiry: Date.now() + ttl };
+
+                // No LiDAR on web — cloud AI is critical, speak results directly
+                if (hazard.speak) {
+                    speakAlert(hazard.key, hazard.speak, hazard.level === 'danger' ? 3 : 2);
+                }
+            }).catch(() => { state.aiScanInProgress = false; });
+        }
+
+        // Store COCO-SSD threat for fast loop to pick up (no UI here)
+        state._mainThreat = highestThreat;
+        state.currentObstacle = mostDangerous;
+
+      } catch (e) {
+        console.error('protectionLoop error:', e);
+      }
+        _loopRunning = false;
+        setTimeout(protectionLoop, CONFIG.LOCAL_SCAN_INTERVAL);
+    }
+    
+    // ========== UI UPDATES ==========
+    function updateUI(status, icon, text, detail) {
+        const badge = document.getElementById('statusBadge');
+        const box = document.getElementById('alertBox');
+        const iconEl = document.getElementById('alertIcon');
+        const textEl = document.getElementById('alertText');
+        const detailEl = document.getElementById('alertDetail');
+        
+        badge.className = `status-badge badge-${status}`;
+        badge.textContent = status === 'safe' ? 'SAFE' : status === 'warning' ? 'CAUTION' : 'DANGER';
+        
+        box.className = `alert-box ${status}`;
+        iconEl.textContent = icon;
+        textEl.textContent = text;
+        detailEl.textContent = detail;
+    }
+    
+    function updateDirections(position, status) {
+        const dirs = ['Left', 'Ahead', 'Right'];
+        dirs.forEach(d => {
+            const el = document.getElementById(`dir${d}`);
+            el.className = 'direction-btn';
+            
+            if (position === d.toLowerCase() || (position === 'ahead' && d === 'Ahead')) {
+                el.classList.add('active');
+                if (status === 'danger') el.classList.add('danger');
+            }
+        });
+    }
+    
+    // ========== USER ACTIONS ==========
+    async function describeArea() {
+        speak('Scanning surroundings...', true);
+
+        const result = await analyzeWithAI('detailed');
+        if (result) {
+            speak(result, true);
+        } else if (state.localDetections.length > 0) {
+            const items = state.localDetections
+                .filter(d => d.confidence >= CONFIG.HIGH_CONFIDENCE)
+                .slice(0, 3)
+                .map(d => `${d.name} ${d.position}`)
+                .join(', ');
+            if (items) {
+                speak(`I see: ${items}`, true);
+            } else {
+                speak('Objects detected but not clearly identified', true);
+            }
+        } else {
+            speak('Area appears clear', true);
+        }
+    }
+    
+    async function checkSafety() {
+        speak('Checking safety...', true);
+
+        const result = await analyzeWithAI('detailed');
+        if (result) {
+            speak(result, true);
+        } else {
+            const obstacle = state.localDetections.find(d => d.inPath);
+            if (obstacle) {
+                const displayName = getDisplayName(obstacle);
+                speak(`${displayName} in your path, ${(obstacle.distance * 3.28084).toFixed(0)} feet ahead`, true);
+            } else {
+                speak('Path appears clear', true);
+            }
+        }
+    }
+    
+    function speakDirection(dir) {
+        const items = state.localDetections.filter(d => d.position === dir);
+        if (items.length > 0) {
+            const displayName = getDisplayName(items[0]);
+            speak(`${displayName} on your ${dir}, about ${(items[0].distance * 3.28084).toFixed(0)} feet`, true);
+        } else {
+            speak(`Nothing detected on your ${dir}`, true);
+        }
+        
+        // Flash direction
+        const el = document.getElementById(`dir${dir.charAt(0).toUpperCase() + dir.slice(1)}`);
+        el.classList.add('active');
+        setTimeout(() => el.classList.remove('active'), 1000);
+    }
+    
+    async function triggerAIScan() {
+        speak('Scanning surroundings...', true);
+
+        const result = await analyzeWithAI('detailed');
+        if (result) {
+            speak(result, true);
+        } else {
+            speak('Scan complete. No additional hazards detected.', true);
+        }
+    }
+    
+    // ========== GESTURES ==========
+    function setupGestures() {
+        let holdTimer = null;
+        let lastTap = 0;
+        let holdFired = false;
+        let touchStartX = 0;
+
+        document.body.addEventListener('touchstart', e => {
+            if (e.target.closest('.help') || e.target.closest('.loading')) return;
+            unlockAudio();
+            holdFired = false;
+            touchStartX = e.touches[0].clientX;
+            holdTimer = setTimeout(() => {
+                holdFired = true;
+                vibrate([50]);
+                speak('Listening', true);
+                startListening();
+                const hint = document.getElementById('gestureHint');
+                if (hint) hint.textContent = 'Listening...';
+            }, 600);
+        }, { passive: true });
+
+        document.body.addEventListener('touchend', e => {
+            if (e.target.closest('.help') || e.target.closest('.loading')) return;
+            clearTimeout(holdTimer);
+
+            if (holdFired) {
+                setTimeout(() => {
+                    stopListening();
+                    const hint = document.getElementById('gestureHint');
+                    if (hint) hint.textContent = 'Hold to speak · Double-tap to scan';
+                }, 3000);
+                return;
+            }
+
+            // Swipe
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) > 80) {
+                speakDirection(dx > 0 ? 'right' : 'left');
+                lastTap = 0;
+                return;
+            }
+
+            // Double tap
+            const now = Date.now();
+            if (now - lastTap < 400) {
+                speak('Scanning', true);
+                describeArea();
+                lastTap = 0;
+                return;
+            }
+            lastTap = now;
+        }, { passive: true });
+    }
+
+    // Combined scan — checks safety first, then describes surroundings
+    async function scanAndCheck() {
+        speak('Scanning...', true);
+        const obstacle = state.localDetections.find(d => d.inPath);
+        if (obstacle) {
+            const displayName = getDisplayName(obstacle);
+            speak(`${displayName} in your path, ${(obstacle.distance * 3.28084).toFixed(0)} feet ahead.`, true);
+        }
+        const result = await analyzeWithAI('detailed');
+        if (result) {
+            speak(result, true);
+        } else if (!obstacle) {
+            speak('Path appears clear.', true);
+        }
+    }
+
+    const HELP_SPEECH =
+        'GuideDog protects you automatically using A.I. ' +
+        'Here are your controls. ' +
+        'Double tap the screen to scan your surroundings. ' +
+        'Hold the screen to speak a voice command. ' +
+        'Swipe left or right to check your sides. ' +
+        'Voice commands: say "whats around" to describe the area. ' +
+        '"Is it safe" to check your path. ' +
+        '"Left" or "right" to check a side. ' +
+        '"Scan" for a detailed scan. ' +
+        '"Stop" to pause alerts. "Resume" to continue. ' +
+        '"Help" to hear this again. ' +
+        'Tap anywhere to start.';
+
+    function showHelp() {
+        const helpEl = document.getElementById('help');
+        helpEl.classList.add('visible');
+        speak(HELP_SPEECH, true);
+
+        const dismissHelp = () => {
+            helpEl.removeEventListener('click', dismissHelp);
+            hideHelp();
+        };
+        helpEl.addEventListener('click', dismissHelp);
+    }
+
+    function hideHelp() {
+        document.getElementById('help').classList.remove('visible');
+        try { speechSynthesis.cancel(); } catch(e){}
+        window._helpDismissed = true;
+    }
+
+    // Called once BOTH conditions are met: help dismissed AND models loaded
+    function startApp() {
+        if (window._appStarted) return;
+        // Don't start until BOTH conditions are true
+        if (!window._helpDismissed) return;
+        if (typeof state === 'undefined' || !state.model || !state.video) return;
+        window._appStarted = true;
+        unlockAudio();
+        speak('GuideDog active.', true);
+        state.isRunning = true;
+        state.isPaused = false;
+        protectionLoop();
+        fastHazardLoop();
+    }
+    
+    // ========== INIT ==========
+    async function init() {
+        state.video = document.getElementById('video');
+        initAudio();
+        initSpeechRecognition();
+        setupGestures();
+
+        document.getElementById('helpClose').addEventListener('click', () => { hideHelp(); startApp(); });
+
+        // Load models while user reads privacy/help screens
+        try {
+            state.model = await cocoSsd.load();
+        } catch (e) {
+            console.error('Model load error:', e);
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+            state.video.srcObject = stream;
+            await state.video.play();
+        } catch (e) {
+            console.warn('Camera error:', e);
+        }
+
+        initDepthModel();
+
+        // Models ready — try to start (will succeed if user already dismissed help)
+        if (window._helpDismissed) {
+            startApp();
+        }
+    }
+    
+    window.addEventListener('load', init);
+    
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            state.isRunning = false;
+            if (state.xrSession) { state.xrSession.end().catch(() => {}); state.xrSession = null; state.xrDepthActive = false; }
+        } else if (state.model && state.video?.srcObject) {
+            // Only restart if fully initialised (model loaded, camera running)
+            state.isRunning = true;
+            protectionLoop();
+        }
+    });
+    
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "appId": "com.guidedog.app",
+  "appName": "GuideDog",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
