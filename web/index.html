@@ -399,10 +399,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"
-            integrity="sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre"
             crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
-            integrity="sha384-7qLdgfEQyO9ZQi9ArRHigK+IBto4XPk468jAqc+fnsXaZIcMAhQeLwzggRK7aESl"
             crossorigin="anonymous"></script>
 
     <script type="module">
@@ -460,6 +458,9 @@
         isRunning: false,
         isPaused: false,
         
+        // Environment context (from cloud AI)
+        environment: 'unknown',  // 'indoor', 'outdoor', 'unknown'
+
         // Detection results
         localDetections: [],
         aiResult: null,
@@ -974,6 +975,12 @@
                 // Is it in the walking path?
                 const inPath = cx > 0.25 && cx < 0.75 && cy > 0.3;
 
+                // Filter by environment context
+                const indoorOnly = ['refrigerator', 'bed', 'couch', 'dining table', 'laptop', 'tv'];
+                const outdoorOnly = ['fire hydrant', 'stop sign', 'parking meter'];
+                if (state.environment === 'indoor' && outdoorOnly.includes(p.class)) return null;
+                if (state.environment === 'outdoor' && indoorOnly.includes(p.class)) return null;
+
                 // Danger level
                 let danger = 'low';
                 if (CONFIG.CRITICAL.includes(p.class)) danger = 'critical';
@@ -987,7 +994,7 @@
                     danger: danger,
                     confidence: p.score
                 };
-            }).filter(d => d.confidence >= CONFIG.HIGH_CONFIDENCE);
+            }).filter(d => d && d.confidence >= CONFIG.HIGH_CONFIDENCE);
         } catch (e) {
             return [];
         }
@@ -1071,99 +1078,9 @@
 
     async function initDepthModel() {
         const badge = document.getElementById('aiBadge');
-        if (badge) badge.textContent = 'Starting depth sensor…';
 
-        // ── ATTEMPT 1: WebXR Depth API (LiDAR on iPhone Pro, no model download) ──────────
-        if (navigator.xr) {
-            try {
-                const supported = await navigator.xr.isSessionSupported('immersive-ar');
-                if (supported) {
-                    // Request AR session with depth sensing
-                    const session = await navigator.xr.requestSession('immersive-ar', {
-                        requiredFeatures: ['depth-sensing'],
-                        depthSensing: {
-                            usagePreference: ['cpu-optimized'],
-                            dataFormatPreference: ['luminance-alpha']
-                        }
-                    });
-
-                    state.xrSession = session;
-                    state.xrDepthActive = false; // set true once we get first frame
-
-                    const gl = document.createElement('canvas').getContext('webgl2', { xrCompatible: true })
-                            || document.createElement('canvas').getContext('webgl', { xrCompatible: true });
-
-                    if (gl) {
-                        await gl.makeXRCompatible?.();
-                        const layer = new XRWebGLLayer(session, gl);
-                        session.updateRenderState({ baseLayer: layer });
-
-                        const refSpace = await session.requestReferenceSpace('local');
-
-                        session.requestAnimationFrame(function onXRFrame(t, frame) {
-                            if (!state.isRunning) { session.end(); return; }
-                            session.requestAnimationFrame(onXRFrame);
-
-                            const depthInfo = frame.getDepthInformation?.(frame.getViewerPose(refSpace)?.views[0]);
-                            if (!depthInfo) return;
-
-                            state.xrDepthActive = true;
-                            const w = depthInfo.width, h = depthInfo.height;
-
-                            // Sample center, left, right strips (metres)
-                            let cSum = 0, cN = 0, lSum = 0, lN = 0, rSum = 0, rN = 0;
-                            const yStart = Math.floor(h * 0.2), yEnd = Math.floor(h * 0.8);
-                            for (let y = yStart; y < yEnd; y++) {
-                                for (let x = 0; x < w; x++) {
-                                    const d = depthInfo.getDepthInMeters(x / w, y / h);
-                                    if (!isFinite(d) || d <= 0) continue;
-                                    const fx = x / w;
-                                    if (fx > 0.30 && fx < 0.70) { cSum += d; cN++; }
-                                    else if (fx < 0.22)          { lSum += d; lN++; }
-                                    else if (fx > 0.78)          { rSum += d; rN++; }
-                                }
-                            }
-
-                            const c = cN > 0 ? cSum / cN : 5;
-                            const l = lN > 0 ? lSum / lN : 5;
-                            const r = rN > 0 ? rSum / rN : 5;
-
-                            state.depthHistory.push({ c, l, r, lidar: true });
-                            if (state.depthHistory.length > 6) state.depthHistory.shift();
-
-                            const hazard = computeLiDARHazard(c, l, r);
-                            if (hazard) {
-                                const ttl = hazard.level === 'danger' ? 1200 : 900;
-                                if (!state.depthHazard || hazard.level === 'danger') {
-                                    state.depthHazard = { ...hazard, expiry: Date.now() + ttl };
-                                    speakAlert(hazard.key, hazard.speak, hazard.level === 'danger' ? 3 : 2);
-                                    playAlertSound('ahead', hazard.level);
-                                    vibrateAlert(hazard.level);
-                                }
-                            }
-                        });
-
-                        // Give it 3s to get first frame; if no depth data, fall through to model
-                        await new Promise(r => setTimeout(r, 3000));
-                    }
-
-                    if (state.xrDepthActive) {
-                        if (badge) badge.textContent = 'AI + LiDAR Active';
-                        console.log('WebXR LiDAR depth active');
-                        return; // success — don't load Transformers.js
-                    } else {
-                        // Session started but no depth frames — device lacks LiDAR
-                        session.end().catch(() => {});
-                        state.xrSession = null;
-                        console.warn('WebXR AR started but no depth data — device may lack LiDAR');
-                    }
-                }
-            } catch (e) {
-                console.warn('WebXR depth not available:', e.message || e);
-            }
-        }
-
-        // ── ATTEMPT 2: Transformers.js Depth-Anything model (all devices) ────────────────
+        // Skip WebXR — it blocks for 3+ seconds and rarely works on mobile Safari.
+        // Go straight to Transformers.js depth model.
         if (badge) badge.textContent = 'Loading depth model…';
 
         const loaded = await new Promise(resolve => {
@@ -1641,6 +1558,15 @@
                 state.aiScanInProgress = false;
                 if (!result) return;
                 state.aiResult = result;
+
+                // Detect indoor/outdoor from AI response
+                const lower = result.toLowerCase();
+                if (/indoor|room|hallway|corridor|kitchen|bathroom|office|inside/.test(lower)) {
+                    state.environment = 'indoor';
+                } else if (/outdoor|sidewalk|street|road|outside|parking|crosswalk/.test(lower)) {
+                    state.environment = 'outdoor';
+                }
+
                 const hazard = parseAIResult(result);
 
                 if (hazard.level === 'clear') {
@@ -1871,12 +1797,12 @@
     // Called once BOTH conditions are met: help dismissed AND models loaded
     function startApp() {
         if (window._appStarted) return;
-        // Don't start until BOTH conditions are true
         if (!window._helpDismissed) return;
-        if (typeof state === 'undefined' || !state.model || !state.video) return;
+        // Only require COCO-SSD model — depth + video can load later
+        if (typeof state === 'undefined' || !state.model) return;
         window._appStarted = true;
         unlockAudio();
-        speak('GuideDog active.', true);
+        speak('Welcome to GuideDog.', true);
         state.isRunning = true;
         state.isPaused = false;
         protectionLoop();
@@ -1892,11 +1818,12 @@
 
         document.getElementById('helpClose').addEventListener('click', () => { hideHelp(); startApp(); });
 
-        // Load models while user reads privacy/help screens
+        // Load COCO-SSD (reliable, works everywhere)
         try {
             state.model = await cocoSsd.load();
+            console.log('COCO-SSD loaded');
         } catch (e) {
-            console.error('Model load error:', e);
+            console.error('COCO-SSD load failed:', e);
         }
 
         try {
