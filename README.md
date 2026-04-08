@@ -61,7 +61,7 @@ GuideDog-Vision/
 │   └── sw.js
 ├── models/
 │   └── BlindGuideNav.mlpackage # Custom 55-class navigation model
-├── docs/
+├── Documentation/
 │   ├── app/                    # Native app documentation
 │   ├── web/                    # Website documentation
 │   ├── models/                 # Custom model documentation
@@ -87,33 +87,33 @@ GuideDog-Vision/
 
 ### Native App (iOS)
 
-1. [Overview](docs/app/Overview.md)
-2. [Architecture](docs/app/Architecture.md)
-3. [Detection](docs/app/Detection.md)
-4. [Distance](docs/app/Distance.md)
-5. [Cloud AI](docs/app/CloudAI.md)
-6. [Speech and Audio](docs/app/SpeechAndAudio.md)
-7. [Gestures and Voice](docs/app/GesturesAndVoice.md)
-8. [User Interface](docs/app/UI.md)
-9. [Design Decisions](docs/app/DesignDecisions.md)
+1. [Overview](Documentation/app/Overview.md)
+2. [Architecture](Documentation/app/Architecture.md)
+3. [Detection](Documentation/app/Detection.md)
+4. [Distance](Documentation/app/Distance.md)
+5. [Cloud AI](Documentation/app/CloudAI.md)
+6. [Speech and Audio](Documentation/app/SpeechAndAudio.md)
+7. [Gestures and Voice](Documentation/app/GesturesAndVoice.md)
+8. [User Interface](Documentation/app/UI.md)
+9. [Design Decisions](Documentation/app/DesignDecisions.md)
 
 ### Website (PWA)
 
-1. [Overview](docs/web/Overview.md)
-2. [Architecture](docs/web/Architecture.md)
-3. [Detection](docs/web/Detection.md)
-4. [Distance](docs/web/Distance.md)
-5. [Cloud AI](docs/web/CloudAI.md)
-6. [Speech and Audio](docs/web/SpeechAndAudio.md)
-7. [Gestures and Voice](docs/web/GesturesAndVoice.md)
-8. [User Interface](docs/web/UI.md)
-9. [Design Decisions](docs/web/DesignDecisions.md)
+1. [Overview](Documentation/web/Overview.md)
+2. [Architecture](Documentation/web/Architecture.md)
+3. [Detection](Documentation/web/Detection.md)
+4. [Distance](Documentation/web/Distance.md)
+5. [Cloud AI](Documentation/web/CloudAI.md)
+6. [Speech and Audio](Documentation/web/SpeechAndAudio.md)
+7. [Gestures and Voice](Documentation/web/GesturesAndVoice.md)
+8. [User Interface](Documentation/web/UI.md)
+9. [Design Decisions](Documentation/web/DesignDecisions.md)
 
 ### Models and Reference
 
-- [BlindGuideNav Custom Model](docs/models/BlindGuideNav.md)
-- [Test Plan](docs/TestPlan.md)
-- [Privacy Policy](docs/Privacy.md)
+- [BlindGuideNav Custom Model](Documentation/models/BlindGuideNav.md)
+- [Test Plan](Documentation/TestPlan.md)
+- [Privacy Policy](Documentation/Privacy.md)
 
 ## Models
 
@@ -144,4 +144,4 @@ GuideDog-Vision/
 
 All on-device detection runs locally. Cloud AI is used for scene descriptions and stair detection only. No images are stored after processing. No account required. No personal data collected.
 
-See [Privacy Policy](docs/PRIVACY.md) for full details.
+See [Privacy Policy](Documentation/Privacy.md) for full details.
