@@ -4,7 +4,7 @@ AI-powered navigation assistant for blind and visually impaired individuals.
 
 **App Store:** [Download on the App Store](https://apps.apple.com/app/guidedog-vision/id6761731954)
 
-**Website:** [Launch GuideDog Web](https://omega-6.github.io/GuideDog/)
+**Website:** [Launch GuideDog Web](https://omega-6.github.io/GuideDog-Vision/)
 
 ## Overview
 
