@@ -33,9 +33,6 @@ State transitions are immediate. There is no CSS transition on the background co
 
 The status bar sits at the top of the screen with a dark semi-transparent background.
 
-### Status Badge
-The status badge (showing "SAFE", "WARNING", or "DANGER") is hidden by default (`display: none`). It was part of an earlier design and is preserved in the markup but not shown in the current build.
-
 ### AI Badge
 The AI badge appears in the top left area. It initially shows "AI Active" and updates to "AI + LiDAR Active" when the first LiDAR depth reading arrives (triggered by `__onLiDARDepth`). This gives the user and helper a quick visual confirmation that LiDAR is functioning.
 

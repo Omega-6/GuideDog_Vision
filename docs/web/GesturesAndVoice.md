@@ -18,24 +18,17 @@ The gesture system excludes interactions with `.help` and `.loading` elements, w
 
 A touch held for more than 1500 milliseconds triggers `showHelp()`, which displays the help screen and speaks the feature list aloud. This provides a discovery mechanism for users who forget the available commands.
 
-In voice-command mode, the hold gesture is planned to start Web Speech API `SpeechRecognition`. The system would say "Listening" and update the gesture hint to "Listening...". On release, it would wait up to 3 seconds for the recognition to complete (via the `onresult` or `onerror` callbacks). The current implementation uses a button-based microphone trigger (`btnMic`) instead.
+Voice recognition is started through the on screen microphone button rather than through a hold gesture. Tapping the microphone button calls `startListening()`, which is described in the Voice Commands section below.
 
-### Double Tap
+### Tap to Scan
 
-Not implemented as a dedicated gesture in the current code. The bottom-zone tap (Y > 60% of screen height) triggers `triggerAIScan()`, which sends a detailed cloud AI request. The system says "Scanning surroundings..." and then speaks the AI's response. This serves the same function as a dedicated double-tap gesture.
+The website divides the screen into vertical zones for tap actions. A tap in the top zone (Y less than 40 percent of screen height) calls `describeArea()`, which sends a detailed cloud AI request and speaks a full description of the surroundings. A tap in the bottom zone (Y greater than 60 percent of screen height) calls `triggerAIScan()`, which sends a detailed cloud AI request focused on hazards. The system says "Scanning surroundings..." and then speaks the AI's response. The middle zone has no action, which prevents accidental triggers when the user is just resting a finger on the screen.
 
 ### Swipe Left/Right
 
 A horizontal touch movement greater than 60 pixels (with horizontal distance exceeding vertical distance) triggers `speakDirection` for the corresponding side. Swiping right calls `speakDirection('right')`. Swiping left calls `speakDirection('left')`.
 
 The `speakDirection` function checks `state.localDetections` for objects in the requested direction. If an object is found, it speaks the object name and distance (converted to feet). If nothing is detected, it says "Nothing detected on your [direction]". The corresponding direction indicator element briefly highlights for 1 second.
-
-### Tap Zones
-
-Single taps are divided by vertical position:
-- **Top zone (Y < 40%):** Calls `describeArea()`, which sends a detailed AI scan and speaks a full description of the surroundings.
-- **Bottom zone (Y > 60%):** Calls `triggerAIScan()`, which sends a detailed AI scan focused on hazards.
-- **Middle zone (40% to 60%):** No action, preventing accidental triggers.
 
 ---
 
