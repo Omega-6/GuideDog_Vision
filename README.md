@@ -78,15 +78,15 @@ GuideDog-Vision/
 
 ## Models
 
-| Model | Size | Classes | Platform | Status |
-|-------|------|---------|----------|--------|
-| YOLOv8n | 6.2 MB | 80 COCO | Native app | Active |
-| BlindGuideNav | 5.9 MB | 55 navigation | Native app | Loaded, ready for activation |
-| DeepLabV3 | 21 MB | 21 PASCAL VOC | Native app | Active |
-| COCO-SSD | ~5 MB | 80 COCO | Website | Active |
-| Depth-Anything-small | ~25 MB | Depth map | Website + no-LiDAR fallback | Active |
-| Claude Haiku 4.5 | Cloud | Vision + language | Both | Active |
-| GPT-4.1-mini | Cloud | Vision + language | Both | Active |
+| Model | Size | Classes | Platform |
+|-------|------|---------|----------|
+| YOLOv8n | 6.2 MB | 80 COCO | Native app | 
+| BlindGuideNav | 5.9 MB | 55 navigation |
+| DeepLabV3 | 21 MB | 21 PASCAL VOC | Native app | 
+| COCO-SSD | ~5 MB | 80 COCO | Website | 
+| Depth-Anything-small | ~25 MB | Depth map | Website + no-LiDAR fallback | 
+| Claude Haiku 4.5 | Cloud | Vision + language | Both |
+| GPT-4.1-mini | Cloud | Vision + language | Both | 
 
 ## Requirements
 
