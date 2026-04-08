@@ -1,15 +1,27 @@
 # GuideDog Vision
 
-AI-powered navigation assistant for blind and visually impaired individuals.
+AI powered navigation assistant for blind and visually impaired individuals.
 
 | App Store | Website |
 |:---:|:---:|
 | <img src="qr-app.png" alt="QR code for GuideDog Vision on the App Store" width="240"> | <img src="qr-website.png" alt="QR code for GuideDog Vision website" width="240"> |
 | Scan to download on iPhone | Scan to launch in your browser |
 
+## The Problem
+
+43 million people worldwide are completely blind, and another 295 million live with moderate to severe visual impairment. Despite the size of this population, only about 20 thousand people have access to a guide dog. The overwhelming majority of blind and visually impaired people navigate daily life without one, which limits their mobility and independence in ways most sighted people never have to think about.
+
+Three major barriers explain why guide dogs reach so few of the people who need them:
+
+- **Cost.** Breeding, raising, training, and placing a single guide dog runs into the tens of thousands of dollars before a handler ever takes the dog home. Most users do not pay this cost directly because nonprofits cover it through donations, but the supply of trained dogs is permanently capped by how much funding exists.
+- **Access.** Guide dogs cannot go everywhere. They require special accommodations, they are restricted from certain environments, and the handler has to plan around the dog as well as around themselves.
+- **Responsibility.** A guide dog needs daily exercise, food, grooming, veterinary care, and a safe living environment. Caring for a working animal is a long term commitment that not every blind person is in a position to take on.
+
+GuideDog Vision was built to help close this gap. It does not replace a guide dog. A trained animal can do things software cannot, including making independent safety judgments and providing emotional companionship. What software can do is give a much larger population access to the kind of real time obstacle awareness, distance sensing, and scene understanding that a guide dog provides, on hardware they already own. An iPhone in a pocket and a website in a browser are not a substitute for a partner who has been training for two years, but they are available right now to anyone who needs them.
+
 ## Overview
 
-GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, specialized AI models, and cloud AI to detect obstacles, walls, stairs, and other hazards in real time. The companion website provides the same core experience using browser-based detection and a cloud AI guide that acts as a sighted companion.
+GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, specialized AI models, and cloud AI to detect obstacles, walls, stairs, and other hazards in real time. The companion website provides the same core experience using browser based detection and a cloud AI guide that acts as a sighted companion.
 
 ## Project Structure
 
