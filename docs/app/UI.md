@@ -29,9 +29,6 @@ The alert box is centered on screen within the alert area. It displays the curre
 
 State transitions are immediate. There is no CSS transition on the background color or border color. When the risk level changes, the alert box class switches instantly. The `transition: all 0.3s` in the base `.alert-box` class applies only to the scale/transform animations, not to color changes. This ensures the user (or helper) sees the state change without a gradual fade that could mask a sudden danger.
 
-## Status Bar
-
-The status bar sits at the top of the screen with a dark semi-transparent background.
 
 ### AI Badge
 The AI badge appears in the top left area. It initially shows "AI Active" and updates to "AI + LiDAR Active" when the first LiDAR depth reading arrives (triggered by `__onLiDARDepth`). This gives the user and helper a quick visual confirmation that LiDAR is functioning.
