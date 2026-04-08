@@ -9,7 +9,7 @@ AI-powered navigation assistant for blind and visually impaired individuals.
 
 ## Overview
 
-GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, on-device AI models, and cloud AI to detect obstacles, walls, stairs, and other hazards in real time. The companion website provides the same core experience using browser-based detection and a cloud AI guide that acts as a sighted companion.
+GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, specialized AI models, and cloud AI to detect obstacles, walls, stairs, and other hazards in real time. The companion website provides the same core experience using browser-based detection and a cloud AI guide that acts as a sighted companion.
 
 ## Project Structure
 
