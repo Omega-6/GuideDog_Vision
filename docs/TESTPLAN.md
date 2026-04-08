@@ -56,7 +56,7 @@
 - Deny camera permission. Verify the app handles it gracefully (no crash).
 
 ### Non-LiDAR Devices
-- Run on an iPhone without LiDAR (e.g., iPhone 13 mini).
+- Run on an iPhone without LiDAR (ex:. iPhone 13 mini).
 - Verify Depth-Anything model loads as fallback.
 - Verify wall/obstacle detection still functions (using depth model thresholds).
 
