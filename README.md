@@ -145,7 +145,3 @@ GuideDog-Vision/
 All on-device detection runs locally. Cloud AI is used for scene descriptions and stair detection only. No images are stored after processing. No account required. No personal data collected.
 
 See [Privacy Policy](docs/PRIVACY.md) for full details.
-
-## Student Project
-
-Built as a student project to make navigation safer and more accessible for the visually impaired community.
