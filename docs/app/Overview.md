@@ -1,8 +1,14 @@
-# GuideDog Vision: Application Overview
+# Application Overview
+
+## The Problem
+
+Roughly **2.2 billion people** worldwide live with some form of vision impairment, including **43.3 million** who are completely blind and **295.1 million** with moderate to severe visual impairment. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people actually have one. The remaining 98 percent navigate daily life without one because guide dogs cost **$40,000 to $60,000** to train, take **two years** to produce, and have wait lists that stretch from **one to three years**. Even after placement, only about a third of dogs entering a training program graduate.
+
+GuideDog Vision is built to help close that gap. It does not replace a guide dog. A trained animal can do things software cannot. What software can do is provide real time obstacle awareness, distance sensing, and scene understanding on hardware that millions of blind people already own. See the [README](../../README.md) for the full problem statement and source citations.
 
 ## Purpose
 
-GuideDog Vision is a native iOS application designed to provide real-time navigation assistance to blind and visually impaired users. The app transforms an iPhone into an intelligent obstacle detection and scene understanding tool, using a combination of on-device sensors, machine learning models, and cloud AI to describe the user's surroundings through speech, haptic feedback, and spatial audio.
+GuideDog Vision is a native iOS application designed to provide real time navigation assistance to blind and visually impaired users. The app transforms an iPhone into an intelligent obstacle detection and scene understanding tool, using a combination of on device sensors, machine learning models, and cloud AI to describe the user's surroundings through speech, haptic feedback, and spatial audio.
 
 The core philosophy is proactive protection. The user does not need to interact with the app to receive safety alerts. GuideDog continuously monitors the environment and announces obstacles, walls, doors, vehicles, and other hazards as the user walks. When the user wants more detail, gestures and voice commands provide on-demand scene descriptions.
 

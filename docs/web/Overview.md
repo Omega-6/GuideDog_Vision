@@ -1,4 +1,10 @@
-# GuideDog Vision: PWA Website Overview
+# PWA Website Overview
+
+## The Problem
+
+Roughly **2.2 billion people** worldwide live with some form of vision impairment, including **43.3 million** who are completely blind and **295.1 million** with moderate to severe visual impairment. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people actually have one. Cost (**$40,000 to $60,000** per dog), training time (**two years**), low graduation rates (**roughly one in three** dogs make it through), and waiting lists (**one to three years**) cap the supply far below what is needed.
+
+The native GuideDog Vision iOS app helps close part of this gap, but it requires an iPhone, ideally one with LiDAR. The PWA website goes further: it runs in any modern web browser on any device, with no app store installation, no LiDAR requirement, and no cost. See the [README](../../README.md) for the full problem statement and source citations.
 
 ## What It Is
 
