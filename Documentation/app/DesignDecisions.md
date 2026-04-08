@@ -82,7 +82,7 @@ An earlier version of the NavigationEngine's `start()` method was `async`. It aw
 
 The synchronous version sets `isRunning = true` and then immediately configures and runs the ARSession on the main thread. The detection layers will not receive any `session(_:didUpdate:)` callbacks until the ARSession has actually started delivering frames, so there is no race condition. The heavy initialization (HapticController, SpatialAudioController) is deferred with `asyncAfter` to avoid blocking the main thread, but the ARSession itself starts synchronously.
 
-## Why Cloud AI on Scene Change, Not on a Timer
+## Why is Cloud AI on Scene Change, Not on a Timer
 
 An earlier approach used a timer that triggered a cloud AI scan every 30 seconds. This had two problems:
 
