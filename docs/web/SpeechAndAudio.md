@@ -1,4 +1,16 @@
-# GuideDog Vision: Speech and Audio System
+# Speech and Audio System
+
+## What Makes This System Non Trivial
+
+The web speech and audio system has to deal with iOS Safari, which is the most restrictive environment for browser audio. Several workarounds were discovered through testing and are now baked into the design:
+
+- **Audio unlock primer utterance.** iOS Safari blocks `speechSynthesis.speak()` until a user gesture occurs. The fix is to call `speak()` with an empty string, volume 0, and rate 10 (max) on the very first touch. The user hears nothing but the speech engine becomes unlocked for all subsequent calls.
+- **Document level touch listeners.** The unlock listeners attach to `document` rather than to specific UI elements, because privacy and help overlays use higher z index values that intercept touches before they reach lower elements. Document level listeners catch every touch regardless of which overlay is currently visible.
+- **Never call `cancel()` before `speak()`.** On iOS Safari, calling `speechSynthesis.cancel()` immediately before `speak()` can silently drop the new utterance. The `doSpeak` wrapper never cancels. Only the priority 3 danger path cancels, and even then it waits 50 milliseconds before speaking the replacement.
+- **Exponential gain envelope on beeps.** Each tone uses a gain ramp from the target volume down to 0.01 over the duration. An abrupt cutoff would produce an audible click on most speakers. The exponential ramp produces a clean fade.
+- **`onended` audio node disconnect.** Every oscillator, gain, and panner is disconnected after the beep finishes to prevent memory leaks from accumulated audio nodes.
+- **Three independent encoding dimensions.** Urgency is encoded by frequency (500, 800, 1200 Hz), beep count (1, 2, 3), and volume (0.3, 0.5, 0.7). All three reinforce the same severity signal so the user picks up on the urgency even if one dimension is masked by background noise.
+- **Stereo panning for spatial cues.** Left obstacles pan to -0.8, right obstacles pan to +0.8, ahead plays at 0. The user gets directional information without needing the system to speak the word "left" or "right."
 
 ## Overview
 

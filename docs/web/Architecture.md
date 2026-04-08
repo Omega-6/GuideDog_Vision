@@ -1,4 +1,15 @@
-# GuideDog Vision: PWA Architecture
+# PWA Architecture
+
+## What Makes This Architecture Non Trivial
+
+Running real time computer vision in a web browser, on a phone, in iOS Safari, with two ML models loaded at once, has serious memory and timing constraints. Several decisions in the architecture come from working around those constraints:
+
+- **Dual loop system.** A fast loop (50ms / 20fps) handles cheap operations (pixel wall check, UI updates, speech) and a slow loop (200ms / 5fps) handles expensive operations (object detection, depth model, cloud AI). The split is justified by walking speed math: at 1.4 m/s a person covers 7 cm in 50 ms but 28 cm in 200 ms. The user needs 50 ms response for walls, but ML inference cannot run that fast.
+- **Single owner for UI updates.** The fast loop is the sole writer to the DOM. The slow loop only writes to the shared state object. An earlier version had both loops calling `updateUI` and the alert box flickered between states within a single animation frame. Restricting all UI writes to one loop eliminates the race.
+- **Camera before model load order.** The camera initializes before any model loads, so the pixel variance wall check has video frames to process from the very first cycle. Loading models first would leave the user unprotected for the 3 to 5 seconds it takes to download COCO-SSD.
+- **Single file deployment.** All HTML, CSS, and JavaScript live in one `index.html` file. No build tools, no bundler, no framework. One file loads in one request and has no dependency resolution issues. This is unusual for a project with this much functionality, but it eliminates an entire class of deployment failures.
+- **COCO-SSD via script tag, not ES module.** MediaPipe uses ES module imports that crash iOS Safari during WebAssembly initialization. COCO-SSD loads via a traditional `<script>` tag and avoids the crash.
+- **Transformers.js v2, not v3.** Transformers.js v3 uses ONNX Runtime Web, which on iOS Safari combined with TensorFlow.js exceeds the per tab memory budget on 4 GB iPhones. Version 2 has a lighter inference engine that coexists with TensorFlow.js inside the same tab.
 
 ## Single File Structure
 

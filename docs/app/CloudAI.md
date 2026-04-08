@@ -1,8 +1,20 @@
 # Cloud AI Scene Description
 
+## Why Cloud AI Exists
+
+The native iOS app already has LiDAR depth sensing, ARKit mesh classification, YOLOv8n object detection, BlindGuideNav navigation detection, and DeepLabV3 semantic segmentation. All five layers run on the device with no network access required. So why send anything to the cloud at all?
+
+The local detection layers are fast and reliable but they cannot read context. They know that a wall is 1.2 meters ahead. They know that a person is on the right at 3 meters. They cannot tell the user that the wall has a sign on it that says "Restroom," that the person is a store employee at a service counter, that the floor changes from tile to carpet at the doorway, or that the staircase ten feet ahead descends rather than ascends. These are exactly the kinds of details a sighted companion would mention. They require visual reading of the scene as a whole, not detection of individual objects.
+
+A general purpose vision language model can produce that kind of description from a single camera frame in under three seconds. The cloud AI fills the gap between object detection and scene understanding. It is not a replacement for the local detection layers. It is a layer on top of them that catches the context they miss.
+
+The cloud AI in the iOS app fires only on demand (user requested scan) or when the scene meaningfully changes (mesh classification delta). It does not run continuously. The local layers handle the continuous safety job, and the cloud AI handles the occasional "what is going on around me?" job that the local layers cannot answer alone.
+
 ## AISceneDescriber
 
-The AISceneDescriber provides on-demand scene understanding by sending a camera frame to two cloud AI providers simultaneously and speaking whichever response arrives first. This "AI race" approach minimizes latency, because the user hears the fastest response regardless of which provider won.
+The AISceneDescriber provides on demand scene understanding by sending a camera frame to two cloud AI providers simultaneously and speaking whichever response arrives first. This AI race approach minimizes latency, because the user hears the fastest response regardless of which provider won.
+
+**Why race two providers.** Calling one provider would still work, but every provider has occasional latency spikes (cold starts, network blips, server load). Sending the same request to two providers in parallel and using whichever response arrives first cuts the average response time and provides automatic failover if one provider is down. The cost is a doubled token spend, which is acceptable because cloud AI fires only on user demand or scene change, not continuously.
 
 ## Providers and Infrastructure
 

@@ -50,32 +50,36 @@ GuideDog-Vision/
 
 ## Documentation
 
-### Native App
-- [Overview](docs/app/OVERVIEW.md)
-- [Architecture](docs/app/ARCHITECTURE.md)
-- [Detection Pipeline](docs/app/DETECTION.md)
-- [Speech and Audio](docs/app/SPEECH_AND_AUDIO.md)
-- [Distance Estimation](docs/app/DISTANCE.md)
-- [Gestures and Voice](docs/app/GESTURES_AND_VOICE.md)
-- [User Interface](docs/app/UI.md)
-- [Cloud AI](docs/app/CLOUD_AI.md)
-- [Design Decisions](docs/app/DESIGN_DECISIONS.md)
+### Native App (iOS)
 
-### Website
-- [Overview](docs/web/OVERVIEW.md)
-- [Architecture](docs/web/ARCHITECTURE.md)
-- [Detection Pipeline](docs/web/DETECTION.md)
-- [Speech and Audio](docs/web/SPEECH_AND_AUDIO.md)
-- [Cloud AI Guide](docs/web/CLOUD_AI_GUIDE.md)
-- [Gestures and Voice](docs/web/GESTURES_AND_VOICE.md)
-- [User Interface](docs/web/UI.md)
-- [Design Decisions](docs/web/DESIGN_DECISIONS.md)
+1. [Overview](docs/app/Overview.md)
+2. [Architecture](docs/app/Architecture.md)
+3. [Detection](docs/app/Detection.md)
+4. [Distance](docs/app/Distance.md)
+5. [Cloud AI](docs/app/CloudAI.md)
+6. [Speech and Audio](docs/app/SpeechAndAudio.md)
+7. [Gestures and Voice](docs/app/GesturesAndVoice.md)
+8. [User Interface](docs/app/UI.md)
+9. [Design Decisions](docs/app/DesignDecisions.md)
 
-### Models and Testing
-- [BlindGuideNav Custom Model](docs/models/BLINDGUIDENAV.md)
-- [Privacy Policy](docs/PRIVACY.md)
-- [Requirements](docs/REQUIREMENTS.md)
-- [Test Plan](docs/TESTPLAN.md)
+### Website (PWA)
+
+1. [Overview](docs/web/Overview.md)
+2. [Architecture](docs/web/Architecture.md)
+3. [Detection](docs/web/Detection.md)
+4. [Distance](docs/web/Distance.md)
+5. [Cloud AI](docs/web/CloudAI.md)
+6. [Speech and Audio](docs/web/SpeechAndAudio.md)
+7. [Gestures and Voice](docs/web/GesturesAndVoice.md)
+8. [User Interface](docs/web/UI.md)
+9. [Design Decisions](docs/web/DesignDecisions.md)
+
+### Models and Reference
+
+- [BlindGuideNav Custom Model](docs/models/BlindGuideNav.md)
+- [Requirements](docs/Requirements.md)
+- [Test Plan](docs/TestPlan.md)
+- [Privacy Policy](docs/Privacy.md)
 
 ## Models
 

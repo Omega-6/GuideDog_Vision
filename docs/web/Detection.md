@@ -1,8 +1,21 @@
-# GuideDog Vision: Detection System
+# Detection System
 
 ## Overview
 
-The PWA uses four detection layers that run concurrently. Each layer has different strengths, speeds, and failure modes. Together, they provide redundant coverage so that no single point of failure leaves the user unprotected.
+The PWA uses five detection layers that run concurrently. Each layer has different strengths, speeds, and failure modes. Together, they provide redundant coverage so that no single point of failure leaves the user unprotected.
+
+## What Makes This Pipeline Non Trivial
+
+The website is running real time computer vision in a web browser, on a phone, with no LiDAR. Several techniques in this pipeline go beyond just calling a model and waiting for results:
+
+- **Pixel variance wall check.** Pure JavaScript, no ML, runs in under 5 milliseconds. Detects flat surfaces by computing brightness variance and edge density across a 64 by 48 sample of the center frame. This is the safety net that protects the user during the 3 to 5 seconds it takes the COCO-SSD model to download.
+- **Asymmetric temporal smoothing.** Escalation is instant (a single frame can trigger danger), but de escalation requires 2 consecutive safe readings before the system relaxes. Being too cautious is fine, being too late is dangerous.
+- **Camera triangulation with a curated heights table.** The system uses real pinhole camera math to estimate distance from bounding box height, with a hand built table of 24 known object heights. See [Distance](Distance.md) for the full pipeline.
+- **Auto calibration of relative depth.** The Depth-Anything model only outputs unitless 0 to 255 values. The system bootstraps absolute distance measurements from those relative values by using triangulated detections as ground truth anchors. See [Distance](Distance.md).
+- **Two ML detectors sharing one runtime.** COCO-SSD (TensorFlow.js) and BlindGuideNav (ONNX Runtime Web) run on the same camera frames in the same protection loop. Their results merge into a single deduplicated list before the announcement system picks which object to speak.
+- **Center vs sides depth deviation.** Catches narrow obstacles (poles, signs, railings) that fill the center but not the periphery. A pure absolute threshold would miss these.
+
+Each technique is described in the layer sections below.
 
 ---
 
@@ -21,55 +34,9 @@ Of the 80 COCO classes, the system filters to 19 objects relevant to pedestrian 
 
 Detections below 0.7 confidence are discarded entirely. This threshold (`CONFIG.HIGH_CONFIDENCE`) was chosen to eliminate false positives that would cause unnecessary alerts. A false "person ahead" alert while walking in an empty hallway erodes user trust quickly.
 
-### Distance Estimation via Known-Object Triangulation
+### Distance Estimation
 
-When COCO-SSD detects an object with a known real-world height, the system estimates distance using camera geometry:
-
-```
-distance = (realHeight * imageHeight) / (2 * bboxHeight * tan(FOV/2))
-```
-
-Where:
-- `realHeight` is the known physical height of the object in meters
-- `imageHeight` is the video frame height in pixels
-- `bboxHeight` is the bounding box height in pixels
-- `FOV` is the camera's vertical field of view
-
-**Known Heights Table (meters):**
-
-| Object | Height | Object | Height |
-|--------|--------|--------|--------|
-| person | 1.7 | car | 1.5 |
-| chair | 0.9 | couch | 0.85 |
-| bus | 3.0 | truck | 3.0 |
-| motorcycle | 1.1 | bicycle | 1.0 |
-| refrigerator | 1.7 | stop sign | 2.1 |
-| parking meter | 1.2 | bench | 0.85 |
-| bed | 0.6 | dining table | 0.75 |
-| fire hydrant | 0.6 | backpack | 0.5 |
-| potted plant | 0.5 | dog | 0.5 |
-| cat | 0.3 | horse | 1.6 |
-| suitcase | 0.7 | sports ball | 0.22 |
-| skateboard | 0.1 | toilet | 0.4 |
-
-The camera FOV is assumed to be 55 degrees, which is typical for most phone rear cameras. This is converted to radians internally. The `getCameraFOV()` function returns this value.
-
-Distance results are clamped between 0.3 meters and 8.0 meters. Objects closer than 0.3 meters are likely camera artifacts. Objects beyond 8 meters are too far to matter for pedestrian navigation.
-
-### Fallback for Unknown Objects
-
-When an object does not have a known height (not in the table above), the system falls back to a bounding box size ratio table:
-
-| Bbox size ratio | Estimated distance |
-|-----------------|-------------------|
-| > 60% of frame | 0.5m |
-| > 45% of frame | 1.0m |
-| > 30% of frame | 1.5m |
-| > 20% of frame | 2.0m |
-| > 10% of frame | 3.0m |
-| smaller | 4.0m |
-
-This is a rough approximation. The triangulation method is significantly more accurate when available.
+The full distance pipeline (known object triangulation, auto calibration of relative depth, approach rate detection, and center vs sides analysis) is documented in [Distance](Distance.md). In brief: detected objects with known real world heights are converted to absolute distances through pinhole camera geometry, and those distances are used to calibrate the depth model so that distances to unknown objects can also be estimated.
 
 ### Position Classification
 
@@ -104,51 +71,9 @@ Distance zones determine the alert level:
 
 ### How It Works
 
-The model produces relative depth values, not absolute distances. A value of 200 means "closer than something at 100" but does not directly indicate meters. The system extracts three regions from the depth map:
+The model produces a depth map with values from 0 to 255. Higher values mean closer. Three regions are sampled (center, left strip, right strip) and the average values for each region are stored in `state.depthHistory` as a rolling window of the last 6 readings.
 
-- **Center strip:** 30% to 70% of frame width, 15% to 85% of frame height
-- **Left strip:** less than 22% of frame width
-- **Right strip:** greater than 78% of frame width
-
-Average depth values for each region are stored in `state.depthHistory` as a rolling window of the last 6 readings.
-
-### computeDepthHazard Logic
-
-The function checks several conditions in order:
-
-**1. Approach Rate (works without calibration)**
-
-If depth values have been rising consistently across 4 or more frames, something is getting closer. Each consecutive frame must show an increase of at least 1 unit, and the average rate must exceed a threshold:
-- Average rate > 15 per frame: DANGER ("Approaching fast")
-- Average rate > 8 per frame: WARNING ("Something getting closer")
-
-**2. Calibrated Distance (when available)**
-
-If auto-calibration has been performed (see below), raw depth values are converted to meters:
-- Less than 1.0 meter: DANGER
-- Less than 1.8 meters: DANGER
-- Less than 3.0 meters: WARNING
-
-**3. Uncalibrated Fallback (raw values)**
-
-When no calibration exists, raw center values are compared against empirical thresholds:
-- Center value > 110: DANGER ("Wall/obstacle, close ahead")
-- Center value > 85: WARNING ("Obstacle ahead")
-
-Additionally, center deviation from the scene average is checked:
-- Center ratio minus side average > 0.35: DANGER ("Obstacle directly ahead")
-- Center ratio minus side average > 0.20: WARNING ("Obstacle in path")
-
-### Auto-Calibration from COCO-SSD
-
-When COCO-SSD detects a known-size object in the "ahead" position with at least 0.7 confidence, and the triangulated distance is between 0.5 and 5.0 meters, the system records a calibration point mapping the current center depth value to the estimated real distance.
-
-Calibration uses exponential moving average (alpha = 0.3) to blend new readings with the existing calibration, preventing single-frame outliers from corrupting the mapping.
-
-The conversion formula uses the inverse relationship between depth value and distance:
-```
-distance = (calibration_depth * calibration_meters) / current_depth
-```
+The relative depth values are turned into absolute distances and into actionable threat levels through the auto calibration and approach rate logic. See [Distance](Distance.md) for the full pipeline (calibration formula, approach rate detection, center versus sides deviation analysis).
 
 ---
 
@@ -230,9 +155,33 @@ Results are spoken directly via `speakAlert` at priority 2 (warning) or priority
 
 When the Cloudflare Worker returns an error or the request fails, the system applies exponential backoff: 10 seconds, 20 seconds, 40 seconds, up to a maximum of 60 seconds. The backoff counter resets on any successful response. This prevents hammering a broken endpoint and wasting battery on failed network requests.
 
-### BlindGuideNav (Future)
+---
 
-A custom 55-class object detection model called BlindGuideNav exists in the project's model directory. It was trained specifically for navigation-relevant objects. It currently exists as a PyTorch model and requires ONNX conversion before it can run in the browser via Transformers.js or ONNX Runtime Web. Once converted, it would replace COCO-SSD and provide significantly better coverage of navigation-specific objects.
+## Layer 5: BlindGuideNav Custom Model
+
+**Runtime:** ONNX Runtime Web with the WebAssembly backend
+**Model:** `BlindGuideNav.onnx`, a custom 55 class navigation focused detector exported from PyTorch
+**Cycle:** Interleaved with COCO-SSD in the protectionLoop (200ms cycle)
+**Inference time:** Roughly 80 to 150 ms per frame on a modern phone browser
+
+### Why This Layer Exists
+
+COCO-SSD is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for features that matter most to a blind walker: stairs (going up and going down as separate classes), curbs, crosswalks, doors (open and closed), railings, wet floors, traffic signals, and overhead obstacles. See [BlindGuideNav](../models/BlindGuideNav.md) for the full class list, the architecture, and the training details.
+
+### Integration
+
+The model loads through ONNX Runtime Web alongside COCO-SSD. Both detectors run inside the protection loop on the same camera frame. Their outputs merge into a single deduplicated list of detections before the announcement system picks which object to speak. The downstream announcement logic does not know or care which model produced a given detection. It only needs the class label, position, and distance estimate.
+
+```javascript
+const session = await ort.InferenceSession.create('models/BlindGuideNav.onnx', {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'all'
+});
+```
+
+### Why ONNX Instead of TensorFlow.js
+
+ONNX Runtime Web uses a single shared WebAssembly module that all loaded ONNX models run through. TensorFlow.js loads its own runtime in addition to the COCO-SSD model. Adding a TensorFlow.js conversion of BlindGuideNav on top of the existing COCO-SSD load would double the runtime memory cost. Routing BlindGuideNav through ONNX Runtime Web shares the runtime across both formats and keeps the per tab memory budget under iOS Safari's limit.
 
 ---
 

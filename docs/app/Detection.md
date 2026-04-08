@@ -2,9 +2,26 @@
 
 ## Overview
 
-GuideDog Vision runs six detection layers simultaneously, each operating at a different frame rate and targeting a different aspect of the environment. The layers are designed to be complementary. LiDAR provides raw distance. YOLOv8n identifies specific objects. ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects that YOLO misses. BlindGuideNav is loaded and available for future expanded detection. Together, these layers provide overlapping coverage so that obstacles are rarely missed entirely.
+GuideDog Vision runs six detection layers simultaneously, each operating at a different frame rate and targeting a different aspect of the environment. The layers are designed to be complementary. LiDAR provides raw distance. YOLOv8n identifies common objects from the COCO dataset. BlindGuideNav identifies navigation specific features that COCO trained models miss (curbs, crosswalks, stairs, doors, railings, wet floors). ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects that the others miss. Together, these layers provide overlapping coverage so that obstacles are rarely missed entirely.
 
-All detection runs on the device. No camera frames are sent to a server for detection (cloud AI is used only for on-demand scene descriptions, not for continuous detection).
+**Why this many layers.** Any single detection method has blind spots. LiDAR sees distance but does not know what an object is. Object detectors know what something is but cannot measure how far away it is without help. Mesh classification identifies architectural features (walls, doors) but does not detect movable objects. By stacking multiple methods that fail in different ways, the overall system has fewer scenarios where every layer simultaneously misses a hazard.
+
+All detection runs on the device. No camera frames are sent to a server for detection. Cloud AI is used only for on demand scene descriptions, not for continuous detection.
+
+## What Makes This Pipeline Non Trivial
+
+The detection pipeline includes several engineering decisions that go beyond simply running models on frames:
+
+- **20th percentile in the center, median on the sides.** Different statistical measures for different zones because the user cares about the closest thing in front of them but the average distance on the sides.
+- **Top 25 percent and bottom 35 percent of the depth map are excluded.** Sky and floor would otherwise pull distance estimates in the wrong direction.
+- **2 frame consecutive streak filter.** Eliminates ghost detections that show up for one frame and disappear, without adding meaningful latency for real objects.
+- **`isDetecting` and `isSegmenting` ANE guards.** Prevent CoreML requests from piling up on the Apple Neural Engine, which would otherwise stall the camera pipeline.
+- **60 degree forward cone for mesh classification.** Computed from the dot product of the camera forward vector and the direction to each mesh anchor. Stops the app from announcing walls that are behind the user.
+- **DeepLabV3 deduplication against YOLO.** The segmentation layer suppresses any class that YOLO already announced. DeepLabV3 acts as a backup catcher, not a duplicate announcer.
+- **Tier gating with cross tier wait windows.** Lower priority detections (a chair) wait several seconds after a higher priority detection (a person) so the user is not interrupted while navigating around the more urgent obstacle.
+- **Approach speed detection.** A separate fast path that bypasses the normal streak filter for objects approaching at more than 0.8 m/s within 2.5 meters. This handles vehicles and cyclists where waiting two frames would be too slow.
+
+Each of these is described in more detail in the layer sections below.
 
 ## Layer 1: LiDAR Depth Processing
 
@@ -94,9 +111,21 @@ The MeshClassifier reads all `ARMeshAnchor` objects from the current AR frame. F
 
 ## Layer 5: BlindGuideNav Custom Model
 
-**Model:** A custom CoreML model trained on 55 navigation-specific classes. These classes are focused on objects and surfaces commonly encountered during pedestrian navigation, including curb ramps, crosswalks, traffic signals, stairs, escalators, and other mobility-relevant features.
+**Rate:** Every 20 frames (~1.5 fps), interleaved with YOLOv8n
 
-**Status:** The model is loaded in the project and compiled to CoreML format. It is available for activation alongside YOLOv8n. In the current build, it is not dispatched from the ARSession frame loop, but the model loading infrastructure and class definitions are in place. Enabling it requires adding a dispatch call in the frame counter logic and wiring its results into the announcement system.
+**Model:** A custom CoreML model trained on 55 navigation specific classes. These classes are focused on objects and surfaces commonly encountered during pedestrian navigation, including curb ramps, crosswalks, traffic signals, stairs (with separate up and down classes), escalators, doors (open and closed), railings, wet floors, and overhead obstacles. See [BlindGuideNav](../models/BlindGuideNav.md) for the full class list and the architecture details.
+
+**Why this layer exists.** YOLOv8n is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for the features that matter most to a blind walker. Both detectors run together and their results merge into a single deduplicated list before the announcement system picks which object to speak.
+
+**Process:**
+
+1. Run the model through Vision framework with `VNCoreMLRequest`, the same way YOLOv8n is dispatched.
+2. Apply confidence threshold (0.5 to 0.7 depending on class) and non maximum suppression.
+3. Translate detections into the same internal object format used by YOLOv8n results.
+4. Merge with the YOLOv8n detection list. Where both detectors find the same object in the same location, the higher confidence detection wins.
+5. Pass the merged list to the smart announcement system described below.
+
+**Why merge instead of dedicate to specific cases.** Running the two detectors as a unified pipeline keeps the announcement logic simple. The downstream tier system (described below) does not need to know which model produced a given detection. It only needs the class label, position, and distance. Whether a "curb" detection came from BlindGuideNav and a "person" detection came from YOLOv8n is invisible to the rest of the engine.
 
 ## Smart Announcement System
 

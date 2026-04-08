@@ -1,5 +1,17 @@
 # Distance Estimation and Alert Bands
 
+## Why This Approach Is Non Trivial
+
+Most navigation apps that use LiDAR just read the depth value at the bounding box of the detected object and call it the distance. GuideDog Vision does not do that. The reason is coordinate space alignment: the camera image and the LiDAR depth map do not share a 1 to 1 pixel correspondence. They have different resolutions, slightly different fields of view, and the projection between them involves interpolation that introduces errors at the edges of the frame. During testing, sampling the depth map at the bounding box of an object would sometimes return the distance to the wall behind the object instead of to the object itself.
+
+To avoid this, the engine uses three independent distance signals that get cross checked:
+
+1. **Pinhole camera triangulation** from the size of the detected bounding box and the known real world height of the object.
+2. **LiDAR zone distances** computed by statistical aggregation over thirds of the frame, with separate aggregation methods for the center (closest in path) and the sides (representative).
+3. **A cross check rule** that averages the two when they agree and prefers triangulation when they disagree.
+
+A separate progressive band system on top of all this prevents the user from being told "stop" repeatedly when LiDAR readings oscillate near a threshold.
+
 ## Progressive Distance Band System
 
 GuideDog Vision uses a 4-band progressive alert system that fires once when the user enters each band. This design avoids continuous announcements (which become white noise) while ensuring the user is warned at each stage of approach.
@@ -46,7 +58,9 @@ distance = (realHeight * focalLength) / bboxPixelHeight
 
 ### Camera Intrinsics
 
-The focal length is not hardcoded. The engine reads it from `ARFrame.camera.intrinsics`, which provides the exact vertical focal length in pixels for the current camera configuration. This is more accurate than a hardcoded value because it accounts for the specific lens and sensor combination of each iPhone model.
+**Why this matters.** Most phone navigation apps hardcode a single FOV value (commonly 55 or 60 degrees) and use it for every device. This is convenient but incorrect. Different iPhone models have different rear camera lenses with different fields of view, and even within a single model the active lens can switch (wide vs ultrawide vs telephoto) depending on what ARKit selects. A hardcoded FOV introduces a systematic distance error that varies by device.
+
+GuideDog Vision reads the real focal length from `ARFrame.camera.intrinsics` on every frame. This is the actual vertical focal length in pixels for the current camera configuration. The triangulation formula then becomes exact for the specific lens and sensor combination of each iPhone, instead of being approximate for some imaginary average phone.
 
 ### Known Heights Table
 

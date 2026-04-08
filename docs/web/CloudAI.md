@@ -1,10 +1,20 @@
-# GuideDog Vision: Cloud AI Guide
+# Cloud AI Guide
+
+## Why Cloud AI Exists
+
+The web PWA does not have LiDAR. It does not have ARKit. It does not have a Neural Engine. Browsers cannot access any of those sensors or accelerators even when the underlying hardware is present. The website only has the camera image and whatever models can run inside the browser through TensorFlow.js or ONNX Runtime Web.
+
+This is a much harder starting point than the native app. The local models (COCO-SSD, Depth-Anything, BlindGuideNav, the pixel variance wall check) do a respectable job of catching common obstacles, but they share the same limitation as the iOS local models: they detect things, they do not understand scenes. They cannot tell the user that there is a low overhanging branch they need to duck under, that the path ahead splits into a sidewalk and a parking lot, that the door on the left is the entrance and the door on the right is staff only, or that the floor changes from concrete to gravel just past the curb. These are exactly the things a sighted companion would mention. They require visual reading, not object detection.
+
+The cloud AI acts as that sighted companion. A general purpose vision language model takes a single camera frame and describes what it sees in natural language. It catches the context the local models cannot read.
+
+On the website the cloud AI runs continuously, not on demand. Every 5 seconds the website sends a frame to the cloud and speaks the response. This is the website's primary compensation for the absence of LiDAR. On the iOS app the cloud AI fires only on user request because the LiDAR layers already provide reliable distance information. On the website the local models alone are not enough, so the cloud AI runs on a regular schedule to keep filling the gap.
 
 ## Purpose
 
-The Cloud AI Guide is the PWA's primary compensation for the absence of LiDAR hardware. On the native iOS app, LiDAR provides precise depth measurements at 60fps, enabling real-time distance sensing for walls, stairs, and obstacles. The PWA has no access to LiDAR. Instead, the cloud AI acts as a sighted guide companion, scanning the camera feed every 5 seconds and describing what it sees in natural language.
+The Cloud AI Guide acts as a sighted guide companion. It scans the camera feed every 5 seconds and describes what it sees in natural language. The descriptions cover obstacles, stairs, doorways, floor conditions, environmental context, and which direction looks clear for walking.
 
-The AI does not replace the local detection models. COCO-SSD and Depth-Anything continue to run independently. The AI supplements them by catching things they miss: stairs, floor conditions, signage, narrow passages, doors, and environmental context that object detection alone cannot provide.
+The AI does not replace the local detection models. COCO-SSD, Depth-Anything, BlindGuideNav, and the pixel variance wall check continue to run independently. The AI supplements them by catching things they miss.
 
 ---
 

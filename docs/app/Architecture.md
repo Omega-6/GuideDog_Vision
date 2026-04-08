@@ -1,5 +1,16 @@
 # Architecture
 
+## What Makes This Architecture Non Trivial
+
+GuideDog Vision is a Capacitor app, which is unusual for a real time computer vision application. Most apps in this category are pure native (SwiftUI or UIKit). The Capacitor architecture introduces a JavaScript bridge that, if used carelessly, would add latency to safety critical operations. Several decisions keep that bridge out of the hot path:
+
+- **JavaScript only renders the display surface.** All sensor processing, model inference, audio output, and haptic feedback runs in Swift. The JavaScript layer receives status updates and renders them. It never makes detection decisions.
+- **Synchronous engine startup.** The `start()` method is intentionally not `async`. An earlier async version had a race condition where `isRunning` was set to `true` before the ARSession had actually started, causing detection layers to run against empty frame data and fail silently.
+- **Six layer dispatch at deliberately different rates.** Each detection layer runs at a different frame interval (4 / 15 / 20 / 60) chosen to match how fast its information becomes stale.
+- **Dedicated background DispatchQueue.** Depth processing and mesh classification run on a serial queue at `.userInitiated` quality of service so they never block the main thread or AR frame delivery.
+- **`isDetecting` and `isSegmenting` ANE guards.** Boolean flags prevent CoreML requests from piling up on the Apple Neural Engine, which would otherwise cause pipeline stalls and frozen camera output.
+- **Staggered initialization.** SpeechController, HapticController, and SpatialAudioController are created at deliberate offsets (immediate, 0.1s, 1.0s) to avoid an AVFoundation conflict that would otherwise leave the speech synthesizer with no audio output.
+
 ## Overview
 
 GuideDog Vision is a native iOS app built on Capacitor 8.3. Capacitor wraps a WKWebView inside a native Swift application, allowing the UI to be written in HTML, CSS, and JavaScript while the detection, speech, and sensor logic runs in native Swift with full access to Apple frameworks.
@@ -63,11 +74,12 @@ The `session(_:didUpdate:)` delegate method is called at the AR frame rate (typi
 |-------|------|----------|---------------|--------|
 | 1 | LiDAR Depth | Every 4 frames | ~7.5 fps | detectionQueue (background) |
 | 2 | YOLOv8n Object Detection | Every 20 frames | ~1.5 fps | Global async queue |
-| 3 | ARKit Mesh Classification | Every 15 frames | ~2 fps | detectionQueue (background) |
-| 4 | DeepLabV3 Segmentation | Every 60 frames | ~0.5 fps | Global async queue |
-| 5 | Camera Frame (preview) | Every 3 frames | ~10 fps | Main thread callback |
+| 3 | BlindGuideNav Custom Detection | Every 20 frames | ~1.5 fps | Global async queue |
+| 4 | ARKit Mesh Classification | Every 15 frames | ~2 fps | detectionQueue (background) |
+| 5 | DeepLabV3 Segmentation | Every 60 frames | ~0.5 fps | Global async queue |
+| 6 | Camera Frame (preview) | Every 3 frames | ~10 fps | Main thread callback |
 
-Layer 5 (BlindGuideNav) is loaded but not yet dispatched from the frame loop. It is available for future activation.
+**Why these specific intervals.** The intervals were chosen to balance computational cost against the rate at which information becomes stale. LiDAR runs the most often because depth changes fastest as the user walks (a person at 1.4 m/s covers 18 cm between LiDAR cycles). Object detectors (YOLO and BlindGuideNav) run slower because their results take longer to compute and because object identity does not change frame to frame in the same way distance does. Mesh classification runs slower still because architectural surfaces change only when the user enters a new area. Segmentation runs slowest because its job is to catch large objects the other layers missed, which is a low frequency event by design.
 
 ### Background Processing
 

@@ -1,5 +1,18 @@
 # Speech, Spatial Audio, and Haptics
 
+## What Makes This System Non Trivial
+
+GuideDog Vision uses three audio channels (speech, spatial beeps, vibration) plus a fourth via the haptic engine. They have to coexist without interrupting each other or overwhelming the user. Several design decisions go beyond just calling `AVSpeechSynthesizer.speak()`:
+
+- **Five priority tiers with explicit cooldowns.** Lower priority speech never interrupts higher priority speech. Each tier has its own cooldown so the same alert does not repeat too quickly.
+- **`stopSpeaking(at: .word)` instead of `.immediate`.** When a higher priority alert needs to interrupt, the synthesizer stops at the next word boundary instead of cutting mid syllable. The result sounds less jarring and is easier to parse.
+- **NSLock thread safety.** All synthesis state (current priority, last spoken text, last spoken time) is protected by an NSLock so the detection queue and main queue can both touch it safely.
+- **1 second SpatialAudioController delay.** AVAudioEngine and AVSpeechSynthesizer conflict if both initialize at the same time. The synthesizer can lose its audio output entirely. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance.
+- **Speech pause before spatial beeps.** A blind user processes audio sequentially. Playing a beep over speech makes both harder to parse. The spatial audio controller checks `speechController.isSpeaking` and skips the beep if speech is currently playing.
+- **AVAudioEngineConfigurationChange listener.** When the audio route changes (headphones connect or disconnect), the engine gets marked dirty and rebuilt on the next beep. Without this the spatial audio would silently break after every route change.
+- **Bluetooth aware speaker fallback.** The audio session is configured for `.playAndRecord`, which by default routes output to the earpiece (too quiet for navigation). The app overrides the route to the speaker only when no Bluetooth audio device is connected, so AirPods routing is never disrupted.
+- **Pre initialized haptic generators.** UIImpactFeedbackGenerator instances are created at startup, not at alert time, to avoid the latency of allocating the haptic engine when an alert needs to fire.
+
 ## SpeechController
 
 The SpeechController manages all spoken output through AVSpeechSynthesizer. It implements a priority system that prevents low-importance announcements from interrupting urgent safety alerts.
