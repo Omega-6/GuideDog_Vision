@@ -52,11 +52,13 @@ By announcing only the single most important object (highest tier, closest dista
 
 ## Why Hysteresis on Distance Bands
 
-LiDAR depth readings oscillate. A wall that is 1.0 meters away might read as 0.98m on one frame and 1.02m on the next. Without hysteresis, the app would enter the danger band (below 1.0m), exit it (above 1.0m), enter it again, and so on, producing repeated "Stop, something close" announcements.
+**What hysteresis is.** Hysteresis is the idea that the threshold for turning something on should be different from the threshold for turning it off. A familiar example is a home thermostat: it turns the heater on when the room drops to 68 degrees, but it does not turn the heater back off until the room rises to 70 degrees. The two degree gap prevents the heater from clicking on and off every few seconds when the temperature hovers right around 69. The same idea applies to any system where the input is noisy and the output should not flicker.
 
-Hysteresis adds a gap between the entry and exit thresholds. The user enters danger at 1.0m but does not exit until 1.3m. This 0.3m gap absorbs the normal oscillation range of LiDAR readings. The user hears one clean announcement when they approach an obstacle, and silence until they either get closer (triggering the critical band) or clearly move away (past 1.3m).
+LiDAR depth readings are noisy in exactly this way. A wall that is 1.0 meters away might read as 0.98 m on one frame and 1.02 m on the next. Without hysteresis, the app would enter the danger band (below 1.0 m), exit it (above 1.0 m), enter it again, and so on, producing repeated "Stop, something close" announcements.
 
-The same logic applies to caution (enter at 2.0m, exit at 2.4m) and approaching (enter at 3.0m, exit at 3.3m). The exit thresholds were determined empirically during testing by observing the range of oscillation at each distance.
+Adding hysteresis means the entry threshold and the exit threshold are not the same number. The user enters the danger band when the distance drops below 1.0 m, but the band does not clear until the distance rises above 1.3 m. This 0.3 m gap absorbs the normal oscillation range of LiDAR readings. The user hears one clean announcement when they approach an obstacle, and silence until they either get closer (triggering the critical band) or clearly move away (past 1.3 m).
+
+The same logic applies to caution (enter at 2.0 m, exit at 2.4 m) and approaching (enter at 3.0 m, exit at 3.3 m). The exit thresholds were determined during testing by observing the range of oscillation at each distance.
 
 ## Why Beeps are Danger-Only
 

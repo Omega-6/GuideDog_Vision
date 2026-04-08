@@ -8,7 +8,7 @@ This forces the web side to do real distance math. The website cannot just read 
 
 ## Layer 1: Known Object Triangulation
 
-When COCO-SSD or BlindGuideNav detects an object whose real world height is known (a person, a car, a chair), the website estimates distance from the pinhole camera model. The math is simple geometry. The bigger the object appears in the image relative to its real size, the closer it is to the camera.
+When COCO-SSD or BlindGuideNav detects an object whose real world height is known (a person, a car, a chair), the website estimates distance from the pinhole camera model. The pinhole camera model is the standard way computer vision describes how the 3D world projects onto a 2D image. It treats the lens as a single point that light passes through, which makes the geometry simple: the bigger an object appears in the image relative to its real world size, the closer it is to the camera. This is the same principle that lets a sighted person tell that a car is far away when it looks small.
 
 The formula is:
 

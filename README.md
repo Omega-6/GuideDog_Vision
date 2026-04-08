@@ -50,21 +50,21 @@ GuideDog Vision helps blind and visually impaired users navigate their surroundi
 ## Project Structure
 
 ```
-GuideDog-Vision/
-├── app/                        # iOS native app (Capacitor + Swift)
-│   ├── ios/App/App/            # Swift source files + ML models
-│   ├── www/                    # Web UI layer
+GuideDog_Vision/
+├── app/                          # iOS native app (Capacitor + Swift)
+│   ├── ios/App/App/              # Swift source files + ML models
+│   ├── www/                      # Web UI layer
 │   └── capacitor.config.json
-├── web/                        # PWA website (browser only, no LiDAR)
+├── web/                          # PWA website (browser only, no LiDAR)
 │   ├── index.html
 │   ├── manifest.json
 │   └── sw.js
-├── models/
-│   └── BlindGuideNav.mlpackage # Custom 55-class navigation model
+├── CustomModel/
+│   └── BlindGuideNav.mlpackage   # Custom 55-class navigation model
 ├── Documentation/
-│   ├── app/                    # Native app documentation
-│   ├── web/                    # Website documentation
-│   ├── models/                 # Custom model documentation
+│   ├── App/                      # Native app documentation
+│   ├── Web/                      # Website documentation
+│   ├── CustomModel/              # Custom model documentation
 │   ├── Privacy.md
 │   └── TestPlan.md
 ```
@@ -87,31 +87,31 @@ GuideDog-Vision/
 
 ### Native App (iOS)
 
-1. [Overview](Documentation/app/Overview.md)
-2. [Architecture](Documentation/app/Architecture.md)
-3. [Detection](Documentation/app/Detection.md)
-4. [Distance](Documentation/app/Distance.md)
-5. [Cloud AI](Documentation/app/CloudAI.md)
-6. [Speech and Audio](Documentation/app/SpeechAndAudio.md)
-7. [Gestures and Voice](Documentation/app/GesturesAndVoice.md)
-8. [User Interface](Documentation/app/UI.md)
-9. [Design Decisions](Documentation/app/DesignDecisions.md)
+1. [Overview](Documentation/App/Overview.md)
+2. [Architecture](Documentation/App/Architecture.md)
+3. [Detection](Documentation/App/Detection.md)
+4. [Distance](Documentation/App/Distance.md)
+5. [Cloud AI](Documentation/App/CloudAI.md)
+6. [Speech and Audio](Documentation/App/SpeechAndAudio.md)
+7. [Gestures and Voice](Documentation/App/GesturesAndVoice.md)
+8. [User Interface](Documentation/App/UI.md)
+9. [Design Decisions](Documentation/App/DesignDecisions.md)
 
 ### Website (PWA)
 
-1. [Overview](Documentation/web/Overview.md)
-2. [Architecture](Documentation/web/Architecture.md)
-3. [Detection](Documentation/web/Detection.md)
-4. [Distance](Documentation/web/Distance.md)
-5. [Cloud AI](Documentation/web/CloudAI.md)
-6. [Speech and Audio](Documentation/web/SpeechAndAudio.md)
-7. [Gestures and Voice](Documentation/web/GesturesAndVoice.md)
-8. [User Interface](Documentation/web/UI.md)
-9. [Design Decisions](Documentation/web/DesignDecisions.md)
+1. [Overview](Documentation/Web/Overview.md)
+2. [Architecture](Documentation/Web/Architecture.md)
+3. [Detection](Documentation/Web/Detection.md)
+4. [Distance](Documentation/Web/Distance.md)
+5. [Cloud AI](Documentation/Web/CloudAI.md)
+6. [Speech and Audio](Documentation/Web/SpeechAndAudio.md)
+7. [Gestures and Voice](Documentation/Web/GesturesAndVoice.md)
+8. [User Interface](Documentation/Web/UI.md)
+9. [Design Decisions](Documentation/Web/DesignDecisions.md)
 
 ### Models and Reference
 
-- [BlindGuideNav Custom Model](Documentation/models/BlindGuideNav.md)
+- [BlindGuideNav Custom Model](Documentation/CustomModel/BlindGuideNav.md)
 - [Test Plan](Documentation/TestPlan.md)
 - [Privacy Policy](Documentation/Privacy.md)
 

@@ -166,7 +166,7 @@ When the Cloudflare Worker returns an error or the request fails, the system app
 
 ### Why This Layer Exists
 
-COCO-SSD is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for features that matter most to a blind walker: stairs (going up and going down as separate classes), curbs, crosswalks, doors (open and closed), railings, wet floors, traffic signals, and overhead obstacles. See [BlindGuideNav](../models/BlindGuideNav.md) for the full class list, the architecture, and the training details.
+COCO-SSD is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for features that matter most to a blind walker: stairs (going up and going down as separate classes), curbs, crosswalks, doors (open and closed), railings, wet floors, traffic signals, and overhead obstacles. See [BlindGuideNav](../CustomModel/BlindGuideNav.md) for the full class list, the architecture, and the training details.
 
 ### Integration
 
@@ -187,9 +187,11 @@ ONNX Runtime Web uses a single shared WebAssembly module that all loaded ONNX mo
 
 ## Temporal Smoothing
 
-To prevent flickering between states, the system uses temporal smoothing with asymmetric behavior:
+Temporal smoothing means using more than one frame's worth of information before deciding what to display. Without it, every frame's detection result would be shown immediately, and any single bad frame would cause a visible flicker. With it, the displayed state lags slightly behind the raw detection but does not jump around.
 
-- **Escalation is instant.** If any single frame detects a danger or warning, the system immediately escalates to that level. There is no delay or confirmation required for threats.
-- **De-escalation requires confirmation.** The system requires 2 consecutive safe readings (`SAFE_CONFIRM_COUNT = 2`) before returning to the safe state. This prevents a single missed detection from briefly showing "Path Clear" when an obstacle is still present.
+The smoothing is asymmetric, meaning the rule for escalating to a more dangerous state is different from the rule for relaxing back to a safer state:
+
+- **Escalation is instant.** If any single frame detects a danger or warning, the system immediately escalates to that level. There is no delay or confirmation required for threats. Being slow to warn is more dangerous than being too cautious.
+- **De-escalation requires confirmation.** The system requires 2 consecutive safe readings before returning to the safe state. This prevents a single missed detection from briefly showing "Path Clear" when an obstacle is still present.
 
 The `_threatHistory` array stores the last 5 raw threat readings. Only the most recent `SAFE_CONFIRM_COUNT` readings are checked for de-escalation. If all of them are safe, the system transitions to safe. Otherwise, it holds the previous threat level.

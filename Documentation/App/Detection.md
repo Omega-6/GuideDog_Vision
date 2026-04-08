@@ -27,7 +27,7 @@ Each of these is described in more detail in the layer sections below.
 
 **Rate:** Every 4 frames (~7.5 fps)
 
-**Prerequisite:** Device must have LiDAR. ARSession tracking state must be `.normal`. The engine skips depth processing during SLAM initialization because depth readings are unreliable before the tracking system has stabilized.
+**Prerequisite:** Device must have LiDAR. ARSession tracking state must be `.normal`. The engine skips depth processing during the first second or two after launch, while ARKit is still building its understanding of the room (a process called SLAM, simultaneous localization and mapping). Depth readings during this phase are unreliable because the tracking system has not yet stabilized.
 
 **Process:**
 
@@ -38,9 +38,9 @@ Each of these is described in more detail in the layer sections below.
 5. Discard any reading below 0.03 meters (sensor noise floor) or above 5.0 meters (beyond useful range).
 6. For the center zone, compute the 20th percentile of all valid samples. This biases toward the closest obstacle in the center, which is what the user will walk into.
 7. For the left and right zones, compute the median. The median avoids floor and edge noise and gives a representative distance for each side.
-8. Apply exponential moving average (EMA) smoothing with alpha = 0.4 to each zone. This smooths LiDAR noise while still responding quickly to genuine distance changes.
-9. Feed the smoothed values into the RiskSolver for hysteresis-aware risk level determination.
-10. Evaluate the progressive distance band system (see DISTANCE.md) and fire alerts if a new band is entered.
+8. Apply exponential moving average smoothing to each zone. An exponential moving average is a way of mixing a new reading into an existing average so that recent readings count more than old ones. The mixing weight is called alpha. This system uses an alpha of 0.4, which means each new reading contributes 40 percent and the previous smoothed value retains 60 percent. The result tracks genuine distance changes within a few frames but rejects single frame noise spikes.
+9. Feed the smoothed values into the RiskSolver, which uses hysteresis (different thresholds for entering and leaving each risk level) to prevent flickering when distances oscillate near a boundary.
+10. Evaluate the progressive distance band system (see [Distance](Distance.md)) and fire alerts if a new band is entered.
 11. Send the smoothed distances to the JavaScript layer via `__onLiDARDepth` and to the haptic and spatial audio controllers.
 
 ## Layer 2: YOLOv8n Object Detection
@@ -113,14 +113,14 @@ The MeshClassifier reads all `ARMeshAnchor` objects from the current AR frame. F
 
 **Rate:** Every 20 frames (~1.5 fps), interleaved with YOLOv8n
 
-**Model:** A custom CoreML model trained on 55 navigation specific classes. These classes are focused on objects and surfaces commonly encountered during pedestrian navigation, including curb ramps, crosswalks, traffic signals, stairs (with separate up and down classes), escalators, doors (open and closed), railings, wet floors, and overhead obstacles. See [BlindGuideNav](../models/BlindGuideNav.md) for the full class list and the architecture details.
+**Model:** A custom CoreML model trained on 55 navigation specific classes. These classes are focused on objects and surfaces commonly encountered during pedestrian navigation, including curb ramps, crosswalks, traffic signals, stairs (with separate up and down classes), escalators, doors (open and closed), railings, wet floors, and overhead obstacles. See [BlindGuideNav](../CustomModel/BlindGuideNav.md) for the full class list and the architecture details.
 
 **Why this layer exists.** YOLOv8n is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for the features that matter most to a blind walker. Both detectors run together and their results merge into a single deduplicated list before the announcement system picks which object to speak.
 
 **Process:**
 
 1. Run the model through Vision framework with `VNCoreMLRequest`, the same way YOLOv8n is dispatched.
-2. Apply confidence threshold (0.5 to 0.7 depending on class) and non maximum suppression.
+2. Apply a confidence threshold (0.5 to 0.7 depending on class) and non maximum suppression (a deduplication step that merges overlapping boxes for the same object, described in [BlindGuideNav](../CustomModel/BlindGuideNav.md)).
 3. Translate detections into the same internal object format used by YOLOv8n results.
 4. Merge with the YOLOv8n detection list. Where both detectors find the same object in the same location, the higher confidence detection wins.
 5. Pass the merged list to the smart announcement system described below.
