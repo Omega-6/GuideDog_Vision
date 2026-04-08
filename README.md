@@ -81,7 +81,7 @@ GuideDog-Vision/
 | Model | Size | Classes | Platform |
 |-------|------|---------|----------|
 | YOLOv8n | 6.2 MB | 80 COCO | Native app | 
-| BlindGuideNav | 5.9 MB | 55 navigation |
+| BlindGuideNav | 5.9 MB | 55 navigation | Both |
 | DeepLabV3 | 21 MB | 21 PASCAL VOC | Native app | 
 | COCO-SSD | ~5 MB | 80 COCO | Website | 
 | Depth-Anything-small | ~25 MB | Depth map | Website + no-LiDAR fallback | 
