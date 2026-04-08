@@ -1,7 +1,5 @@
-const CACHE = 'guidedog-v6';      // bumped — forces guidedog-v5 to clear (build 15: fix overlapping AI scans + LiDAR)
-const CDN_CACHE = 'guidedog-cdn-v1';
-
-const APP_SHELL = ['/GuideDog/', '/GuideDog/index.html', '/GuideDog/manifest.json'];
+const CACHE = 'guidedog-v21';
+const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [
     'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
@@ -9,19 +7,14 @@ const CDN_SCRIPTS = [
 ];
 
 self.addEventListener('install', e => {
+    // Don't cache app shell — always fetch fresh from network
+    // Only pre-cache CDN scripts (large, rarely change)
     e.waitUntil(
-        // App shell MUST succeed; CDN pre-cache is best-effort (large files can time out)
-        caches.open(CACHE)
-            .then(c => c.addAll(APP_SHELL))
-            .then(() => {
-                // Don't block install on CDN fetch — cache opportunistically
-                caches.open(CDN_CACHE).then(c =>
-                    Promise.allSettled(CDN_SCRIPTS.map(url =>
-                        fetch(url).then(r => r.ok ? c.put(url, r) : null).catch(() => null)
-                    ))
-                );
-            })
-            .then(() => self.skipWaiting())   // activate immediately, don't wait for tabs to close
+        caches.open(CDN_CACHE).then(c =>
+            Promise.allSettled(CDN_SCRIPTS.map(url =>
+                fetch(url).then(r => r.ok ? c.put(url, r) : null).catch(() => null)
+            ))
+        ).then(() => self.skipWaiting())
     );
 });
 
@@ -31,17 +24,17 @@ self.addEventListener('activate', e => {
             .then(keys => Promise.all(
                 keys.filter(k => k !== CACHE && k !== CDN_CACHE).map(k => caches.delete(k))
             ))
-            .then(() => self.clients.claim())
+            // Do NOT call clients.claim() — avoids reload race condition on iOS Safari
     );
 });
 
 self.addEventListener('fetch', e => {
     const url = e.request.url;
 
-    // Never intercept cloud AI or model download requests
+    // Never intercept cloud AI, model downloads, or module imports
     if (url.includes('workers.dev') || url.includes('huggingface.co') || url.includes('esm.sh')) return;
 
-    // CDN scripts: cache-first, network fallback
+    // CDN scripts: cache-first (they're versioned, safe to cache)
     if (url.includes('cdn.jsdelivr.net')) {
         e.respondWith(
             caches.open(CDN_CACHE).then(c =>
@@ -54,8 +47,5 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // App shell: cache-first, network fallback
-    e.respondWith(
-        caches.match(e.request).then(r => r || fetch(e.request))
-    );
+    // Everything else: go straight to network (no caching index.html)
 });

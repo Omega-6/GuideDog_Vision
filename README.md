@@ -2,73 +2,111 @@
 
 AI-powered navigation assistant for blind and visually impaired individuals.
 
+**App Store:** [Download on the App Store](https://apps.apple.com/app/guidedog-vision/id6761731954)
+
+**Website:** [Launch GuideDog Web](https://omega-6.github.io/GuideDog/)
+
 ## Overview
 
-GuideDog Vision uses LiDAR, camera AI, and voice to detect obstacles, walls, stairs, and hazards in real time — keeping users safe as they walk.
-
-### Features
-
-- **LiDAR Distance Sensing** — real-time distance measurements in feet
-- **AI Object Detection** — YOLOv8n identifies people, chairs, vehicles, furniture and more
-- **ARKit Mesh Classification** — detects walls, doors, windows from 3D mesh
-- **Cloud AI Scene Analysis** — detects stairs, wet floors, doors, and contextual hazards
-- **Voice Commands** — "What's around", "Is it safe", "Left", "Right", "Scan", "Help"
-- **Haptic Feedback** — vibration patterns match obstacle urgency
-- **Spatial Audio** — directional beeps indicate obstacle direction
-
-### Controls
-
-| Gesture | Action |
-|---------|--------|
-| Hold screen | Speak a voice command |
-| Double tap | Scan surroundings |
-| Swipe left/right | Check sides |
-| CAM button | Toggle camera preview |
+GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, on-device AI models, and cloud AI to detect obstacles, walls, stairs, and hazards in real time. The companion website provides the same core experience using browser-based detection and a cloud AI guide that acts as a sighted companion.
 
 ## Project Structure
 
 ```
 GuideDog-Vision/
-├── app/                    # iOS native app (Capacitor + Swift)
-│   ├── ios/App/App/        # Swift source files
-│   ├── www/                # Web UI layer
+├── app/                        # iOS native app (Capacitor + Swift)
+│   ├── ios/App/App/            # Swift source files + ML models
+│   ├── www/                    # Web UI layer
 │   └── capacitor.config.json
-├── web/                    # PWA website (browser-only, no LiDAR)
+├── web/                        # PWA website (browser only, no LiDAR)
 │   ├── index.html
 │   ├── manifest.json
 │   └── sw.js
-└── docs/                   # Documentation
-    ├── PRIVACY.md
-    ├── REQUIREMENTS.md
-    ├── TECHNICAL.md
-    └── TESTPLAN.md
+├── models/
+│   └── BlindGuideNav.mlpackage # Custom 55-class navigation model
+├── docs/
+│   ├── app/                    # Native app documentation
+│   ├── web/                    # Website documentation
+│   ├── models/                 # Custom model documentation
+│   ├── PRIVACY.md
+│   ├── REQUIREMENTS.md
+│   └── TESTPLAN.md
 ```
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| iOS App | Swift + Capacitor 8.3 |
-| Object Detection | YOLOv8n (CoreML) |
-| Scene Segmentation | DeepLabV3 (CoreML) |
-| Depth Sensing | ARKit LiDAR / Depth-Anything (web) |
-| Cloud AI | Cloudflare Worker, Claude Haiku, GPT-4.1-mini |
-| Speech | AVSpeechSynthesizer / Web Speech API |
+| Component | Native App | Website |
+|-----------|-----------|---------|
+| Object Detection | YOLOv8n (CoreML) | COCO-SSD (TensorFlow.js) |
+| Custom Model | BlindGuideNav (55 classes) | Not yet integrated |
+| Scene Segmentation | DeepLabV3 (CoreML) | N/A |
+| Depth Sensing | ARKit LiDAR | Depth-Anything (Transformers.js) |
+| Mesh Classification | ARKit sceneReconstruction | N/A |
+| Wall Detection | LiDAR depth thresholds | Pixel variance analysis |
+| Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Same (guide mode prompt) |
+| Speech | AVSpeechSynthesizer | Web Speech API |
+| Voice Input | SFSpeechRecognizer | Web Speech API |
+
+## Documentation
+
+### Native App
+- [Overview](docs/app/OVERVIEW.md)
+- [Architecture](docs/app/ARCHITECTURE.md)
+- [Detection Pipeline](docs/app/DETECTION.md)
+- [Speech and Audio](docs/app/SPEECH_AND_AUDIO.md)
+- [Distance Estimation](docs/app/DISTANCE.md)
+- [Gestures and Voice](docs/app/GESTURES_AND_VOICE.md)
+- [User Interface](docs/app/UI.md)
+- [Cloud AI](docs/app/CLOUD_AI.md)
+- [Design Decisions](docs/app/DESIGN_DECISIONS.md)
+
+### Website
+- [Overview](docs/web/OVERVIEW.md)
+- [Architecture](docs/web/ARCHITECTURE.md)
+- [Detection Pipeline](docs/web/DETECTION.md)
+- [Speech and Audio](docs/web/SPEECH_AND_AUDIO.md)
+- [Cloud AI Guide](docs/web/CLOUD_AI_GUIDE.md)
+- [Gestures and Voice](docs/web/GESTURES_AND_VOICE.md)
+- [User Interface](docs/web/UI.md)
+- [Design Decisions](docs/web/DESIGN_DECISIONS.md)
+
+### Models and Testing
+- [BlindGuideNav Custom Model](docs/models/BLINDGUIDENAV.md)
+- [Privacy Policy](docs/PRIVACY.md)
+- [Requirements](docs/REQUIREMENTS.md)
+- [Test Plan](docs/TESTPLAN.md)
+
+## Models
+
+| Model | Size | Classes | Platform | Status |
+|-------|------|---------|----------|--------|
+| YOLOv8n | 6.2 MB | 80 COCO | Native app | Active |
+| BlindGuideNav | 5.9 MB | 55 navigation | Native app | Loaded, ready for activation |
+| DeepLabV3 | 21 MB | 21 PASCAL VOC | Native app | Active |
+| COCO-SSD | ~5 MB | 80 COCO | Website | Active |
+| Depth-Anything-small | ~25 MB | Depth map | Website + no-LiDAR fallback | Active |
+| Claude Haiku 4.5 | Cloud | Vision + language | Both | Active |
+| GPT-4.1-mini | Cloud | Vision + language | Both | Active |
 
 ## Requirements
 
-- iPhone with iOS 15+
-- Works best with LiDAR (iPhone 12 Pro and later)
+### Native App
+- iPhone with iOS 15 or later
+- Best experience on LiDAR-equipped iPhones (iPhone 12 Pro and later)
 - Camera and microphone access required
+- Speech recognition permission for voice commands
+
+### Website
+- Modern browser with camera support (Chrome, Safari, Firefox)
+- Internet connection for cloud AI features
+- HTTPS required (camera access)
 
 ## Privacy
 
-All detection runs on-device. Cloud AI is optional. No data collected. See [Privacy Policy](docs/PRIVACY.md).
+All on-device detection runs locally. Cloud AI is used for scene descriptions and stair detection only. No images are stored after processing. No account required. No personal data collected.
 
-## Website
+See [Privacy Policy](docs/PRIVACY.md) for full details.
 
-PWA available at: https://omega-6.github.io/GuideDog/
+## Student Project
 
-## License
-
-Student project — built to make navigation safer for the visually impaired community.
+Built as a student project to make navigation safer and more accessible for the visually impaired community.
