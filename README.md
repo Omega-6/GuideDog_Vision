@@ -43,7 +43,7 @@ GuideDog-Vision/
 | Depth Sensing | ARKit LiDAR | Depth-Anything (Transformers.js) |
 | Mesh Classification | ARKit sceneReconstruction | N/A |
 | Wall Detection | LiDAR depth thresholds | Pixel variance analysis |
-| Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Same (Guide mode prompt) |
+| Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Claude Haiku 4.5 + GPT-4.1-mini |
 | Speech | AVSpeechSynthesizer | Web Speech API |
 | Voice Input | SFSpeechRecognizer | Web Speech API |
 
