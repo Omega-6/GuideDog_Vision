@@ -52,7 +52,7 @@ GuideDog Vision does not require any sign up, login, or account creation. There 
 
 The app does not collect names, email addresses, location data, device identifiers, or any other personal information.
 
-## Third Party SDKs
+## Third Party Software Development Kits
 
 The app uses the following third party components:
 
