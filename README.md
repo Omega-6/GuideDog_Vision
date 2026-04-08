@@ -65,9 +65,8 @@ GuideDog-Vision/
 │   ├── app/                    # Native app documentation
 │   ├── web/                    # Website documentation
 │   ├── models/                 # Custom model documentation
-│   ├── PRIVACY.md
-│   ├── REQUIREMENTS.md
-│   └── TESTPLAN.md
+│   ├── Privacy.md
+│   └── TestPlan.md
 ```
 
 ## Technology Stack
@@ -113,7 +112,6 @@ GuideDog-Vision/
 ### Models and Reference
 
 - [BlindGuideNav Custom Model](docs/models/BlindGuideNav.md)
-- [Requirements](docs/Requirements.md)
 - [Test Plan](docs/TestPlan.md)
 - [Privacy Policy](docs/Privacy.md)
 
