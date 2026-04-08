@@ -21,11 +21,11 @@ The most well known mobility aid for blind individuals is the guide dog. The rea
 
 Three major barriers explain the gap:
 
-**Cost.** Breeding, raising, and training a single guide dog costs between **$40,000 and $60,000** before the dog is ever placed with a handler [5][6]. Recipients do not usually pay this directly because nonprofit programs raise the money through donations, but the supply of trained dogs is permanently capped by how much funding exists. On top of the upfront cost, ongoing care runs roughly **$180 to $220 per month** for food, veterinary care, and supplies [5].
+**Cost:** Breeding, raising, and training a single guide dog costs between **$40,000 and $60,000** before the dog is ever placed with a handler [5][6]. Recipients do not usually pay this directly because nonprofit programs raise the money through donations, but the supply of trained dogs is permanently capped by how much funding exists. On top of the upfront cost, ongoing care runs roughly **$180 to $220 per month** for food, veterinary care, and supplies [5].
 
-**Supply and waiting lists.** Even if cost were no object, the supply is limited by the training process itself. A guide dog takes about **two years to fully train**, and only about **one in three dogs** that enter a training program actually graduate [5]. Wait lists for an applicant matched with a trained dog stretch from **one year to three years** [7]. Some programs have suspended applications entirely because they cannot keep up with demand.
+**Supply and Waiting Lists:** Even if cost were no object, the supply is limited by the training process itself. A guide dog takes about **two years to fully train**, and only about **one in three dogs** that enter a training program actually graduate [5]. Wait lists for an applicant matched with a trained dog stretch from **one year to three years** [7]. Some programs have suspended applications entirely because they cannot keep up with demand.
 
-**Access and responsibility.** Even after a handler receives a guide dog, the dog cannot go everywhere. Some venues require special accommodations or restrict working animals altogether. The dog itself needs daily exercise, food, grooming, veterinary care, and a safe living environment. A working animal is a long term commitment that not every blind person is positioned to take on.
+**Access and Responsibility.** Even after a handler receives a guide dog, the dog cannot go everywhere. Some venues require special accommodations or restrict working animals altogether. The dog itself needs daily exercise, food, grooming, veterinary care, and a safe living environment. A working animal is a long term commitment that not every blind person is positioned to take on.
 
 ### Where GuideDog Vision Fits
 
