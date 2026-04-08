@@ -38,12 +38,12 @@ GuideDog-Vision/
 | Component | Native App | Website |
 |-----------|-----------|---------|
 | Object Detection | YOLOv8n (CoreML) | COCO-SSD (TensorFlow.js) |
-| Custom Model | BlindGuideNav (55 classes) | Not yet integrated |
+| Custom Model | BlindGuideNav | BlindGuideNav |
 | Scene Segmentation | DeepLabV3 (CoreML) | N/A |
 | Depth Sensing | ARKit LiDAR | Depth-Anything (Transformers.js) |
 | Mesh Classification | ARKit sceneReconstruction | N/A |
 | Wall Detection | LiDAR depth thresholds | Pixel variance analysis |
-| Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Same (guide mode prompt) |
+| Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Same (Guide mode prompt) |
 | Speech | AVSpeechSynthesizer | Web Speech API |
 | Voice Input | SFSpeechRecognizer | Web Speech API |
 
