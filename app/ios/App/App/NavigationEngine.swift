@@ -501,7 +501,7 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
     private static let tier1: Set<String> = ["person", "car", "truck", "bus", "motorcycle", "bicycle"]
     private static let tier2: Set<String> = ["chair", "bench", "dining table", "couch"]
     private static let tier3: Set<String> = ["fire hydrant", "stop sign", "parking meter",
-                                             "refrigerator", "potted plant", "bed", "backpack",
+                                             "refrigerator", "bed", "backpack",
                                              "laptop", "tv"]
     private static let allRelevant = tier1.union(tier2).union(tier3)
 
@@ -607,10 +607,16 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         // (1 per cycle — prevents speech queue buildup and stale announcements)
         var bestToSpeak: Ranked? = nil
 
+        // Global tier-1 self-throttle: when several people/cars are in view,
+        // we don't want a flood of "person ahead, person ahead" overlapping.
+        // The previous announcement needs ~2.5s to finish; gate the next.
+        let tier1Throttled = (now - lastTier1Speech) < 2.5
+
         for r in ranked {
             // Tier gating
             if r.tier == 2 && now - lastTier1Speech < 3.0 { continue }
             if r.tier == 3 && now - lastTier1Speech < 5.0 { continue }
+            if r.tier == 1 && tier1Throttled { continue }
 
             let key = "\(r.label)_\(r.direction)"
 
@@ -618,11 +624,16 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             var shouldSpeak = false
             if let prev = lastAnnounced[key] {
                 let dt = now - prev.time
-                let dd = abs(r.dist - prev.distance)
                 if r.tier == 1 {
-                    if dd > 0.3 && dt > 1.5 { shouldSpeak = true }
-                    else if dt > 4.0 { shouldSpeak = true }
+                    // Tier 1 (people, vehicles): only re-announce when approaching
+                    // meaningfully closer, OR after a long pause if still in view.
+                    // This prevents "stuck on people" when the user walks past
+                    // multiple people who all key to person_<direction>.
+                    let approachingCloser = r.dist < prev.distance - 0.5
+                    if approachingCloser && dt > 3.0 { shouldSpeak = true }
+                    else if dt > 8.0 { shouldSpeak = true }
                 } else {
+                    let dd = abs(r.dist - prev.distance)
                     if dd > 1.0 && dt > 4.0 { shouldSpeak = true }
                     else if dt > 15.0 { shouldSpeak = true }
                 }
@@ -667,7 +678,9 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         }
 
         latestDetections = eventData
-        let staleKeys = lastAnnounced.filter { now - $0.value.time > 20 }.map { $0.key }
+        // Drop stale tracking entries after 10s so a returning object is treated
+        // as fresh (rather than gated by the 8s tier-1 cooldown above).
+        let staleKeys = lastAnnounced.filter { now - $0.value.time > 10 }.map { $0.key }
         for key in staleKeys { lastAnnounced.removeValue(forKey: key) }
     }
 

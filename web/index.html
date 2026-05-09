@@ -244,7 +244,21 @@
         .help-label { font-size: 16px; font-weight: 700; color: #48f; }
         .help-desc { font-size: 14px; color: #aaa; margin-top: 5px; }
         .help-close { margin-top: 20px; padding: 20px; background: #48f; border: none; border-radius: 15px; color: #fff; font-size: 18px; font-weight: 700; }
+        .help-item.toggle { cursor: pointer; }
+        .help-item.toggle:active { background: #1a1a1a; }
         .version-tag { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); right: 8px; font-size: 10px; color: rgba(255,255,255,0.3); z-index: 5; pointer-events: none; }
+
+        /* Colorblind-friendly palette (Okabe-Ito CUD) for protanopia / deuteranopia.
+           Replaces red/green with vermillion / bluish-green which stay distinguishable
+           in red-green color blindness (~6% of males). Toggle via help dialog. */
+        body.colorblind .badge-safe    { background: #009E73; color: #fff; }
+        body.colorblind .badge-warning { background: #E69F00; color: #000; }
+        body.colorblind .badge-danger  { background: #D55E00; color: #fff; }
+        body.colorblind .alert-box.safe    { background: rgba(0, 158, 115, 0.25); border-color: #009E73; }
+        body.colorblind .alert-box.warning { background: rgba(230, 159, 0, 0.30); border-color: #E69F00; }
+        body.colorblind .alert-box.danger  { background: rgba(213, 94, 0, 0.40);  border-color: #D55E00; }
+        body.colorblind .direction-btn.active { border-color: #E69F00; background: rgba(230, 159, 0, 0.30); }
+        body.colorblind .direction-btn.danger { border-color: #D55E00; background: rgba(213, 94, 0, 0.40); }
     </style>
 </head>
 <body>
@@ -296,7 +310,12 @@
             <div class="help-label">Alert Sounds</div>
             <div class="help-desc">Beeps indicate direction of obstacle<br>Fast beeps = DANGER, very close!<br>Vibration = obstacle in your path</div>
         </div>
-        
+
+        <div class="help-item toggle" id="colorblindToggleItem" role="button" aria-pressed="false">
+            <div class="help-label">Colorblind Mode <span id="cbStatus">— off</span></div>
+            <div class="help-desc">Tap to switch alert colors to a red-green colorblind-friendly palette.</div>
+        </div>
+
         <button class="help-close" id="helpClose">START - TAP HERE OR SAY "START"</button>
     </div>
     
@@ -395,7 +414,7 @@
         // Objects that matter for navigation
         CRITICAL: ["car", "bus", "truck", "motorcycle", "bicycle"],
         OBSTACLES: ["person", "chair", "bench", "couch", "bed", "dining table",
-                    "refrigerator", "potted plant", "backpack",
+                    "refrigerator", "backpack",
                     "fire hydrant", "stop sign", "parking meter", "laptop", "tv"]
     };
     
@@ -1939,12 +1958,36 @@
         fastHazardLoop();
     }
 
+    // ========== COLORBLIND PALETTE ==========
+    function setColorblind(enabled) {
+        document.body.classList.toggle('colorblind', !!enabled);
+        const item = document.getElementById('colorblindToggleItem');
+        const status = document.getElementById('cbStatus');
+        if (item) item.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        if (status) status.textContent = enabled ? '— on' : '— off';
+        try { localStorage.setItem('cb', enabled ? '1' : '0'); } catch (e) {}
+    }
+    function initColorblind() {
+        let enabled = false;
+        try { enabled = localStorage.getItem('cb') === '1'; } catch (e) {}
+        setColorblind(enabled);
+        const item = document.getElementById('colorblindToggleItem');
+        if (item) {
+            item.addEventListener('click', () => {
+                const next = !document.body.classList.contains('colorblind');
+                setColorblind(next);
+                speak(next ? 'Colorblind mode on.' : 'Colorblind mode off.', true);
+            });
+        }
+    }
+
     // ========== INIT ==========
     async function init() {
         state.video = document.getElementById('video');
         initAudio();
         initSpeechRecognition();
         setupGestures();
+        initColorblind();
 
         document.getElementById('helpClose').addEventListener('click', hideHelp);
         const privacyNotice = document.getElementById('privacyNotice');
