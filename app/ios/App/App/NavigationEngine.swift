@@ -30,6 +30,7 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
     var onDepthUpdate: ((Float, Float, Float) -> Void)?   // (center, left, right) in metres
     var onCameraFrame: ((CVPixelBuffer) -> Void)?          // ~1/sec for JS preview & AI
     var onDetectionEvent: ((String, String) -> Void)?      // (label, direction)
+    var onDepthMap: ((CVPixelBuffer) -> Void)?             // raw depth buffer for the demo heatmap overlay
 
     var isRunning = false
     private(set) var hasLiDAR = false
@@ -284,6 +285,12 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
 
     private func processDepth(_ depthMap: CVPixelBuffer) {
         lastDepthMap = depthMap
+
+        // Forward to the demo heatmap overlay (callback handles its own locking).
+        // Called before our read-lock since CVPixelBuffer locks are reentrant
+        // for read-only but it's cleaner to keep them disjoint.
+        onDepthMap?(depthMap)
+
         CVPixelBufferLockBaseAddress(depthMap, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(depthMap, .readOnly) }
 
