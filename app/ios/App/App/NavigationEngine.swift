@@ -597,25 +597,14 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         // Tier 1 first, then closest first
         ranked.sort { $0.tier != $1.tier ? $0.tier < $1.tier : $0.dist < $1.dist }
 
-        // Track objects and detect approach speed
+        // Object tracking: keep position history per (label, direction) so the
+        // standard re-announcement check below has stable distance baselines.
+        // Fast-approach interjections were removed — they fired on every cycle
+        // for moving people/cars and felt like the app was nagging.
         var currentTracked = Set<String>()
         for r in ranked {
             let key = "\(r.label)_\(r.direction)"
             currentTracked.insert(key)
-
-            if let prev = trackedObjects[key] {
-                let dt = now - prev.time
-                if dt > 0.3 && dt < 3.0 {
-                    let approachSpeed = (prev.dist - r.dist) / Float(dt)  // meters/sec, positive = approaching
-                    if approachSpeed > 0.8 && r.dist < 2.5 && r.tier == 1 {
-                        // Fast approach — warn immediately
-                        let name = r.det.confidence >= 0.7 ? r.det.label.capitalized : "Someone"
-                        speech?.speak("\(name) approaching fast", urgency: 5.0)
-                        lastAnnounced[key] = (distance: r.dist, time: now)
-                        lastTier1Speech = now
-                    }
-                }
-            }
             trackedObjects[key] = (dist: r.dist, x: Float(r.det.boundingBox.midX), time: now)
         }
         // Clean up objects not seen
@@ -980,7 +969,9 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         guard let frame = arSession?.currentFrame else {
             speech?.speak("Camera not ready.", urgency: 7.0); return
         }
-        speech?.speak("Reading.", urgency: 7.0)
+        // No prelude — back-to-back .user utterances trigger an
+        // AVSpeechSynthesizer quirk where stopSpeaking-then-speak silently
+        // drops the second utterance, swallowing the OCR result.
         VisionTricks.shared.recognizeText(in: frame.capturedImage) { [weak self] text in
             self?.speech?.speak(text, urgency: 7.0)
         }
@@ -990,7 +981,6 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         guard let frame = arSession?.currentFrame else {
             speech?.speak("Camera not ready.", urgency: 7.0); return
         }
-        speech?.speak("Reading bill.", urgency: 7.0)
         VisionTricks.shared.identifyCurrency(in: frame.capturedImage) { [weak self] result in
             self?.speech?.speak(result, urgency: 7.0)
         }
