@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v21';
+const CACHE = 'guidedog-v22';
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [

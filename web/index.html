@@ -284,7 +284,7 @@
         
         <div class="help-item">
             <div class="help-label">Voice Commands (tap mic button)</div>
-            <div class="help-desc">"What's around" - describe area<br>"Is it safe" - check path<br>"Left" / "Right" - check sides<br>"Stop" / "Resume" - pause alerts</div>
+            <div class="help-desc">"What's around" - describe area<br>"Is it safe" - check path<br>"Left" / "Right" - check sides<br>"Read this" - read text aloud<br>"What color" - name a color<br>"What bill" - identify US currency<br>"Stop" / "Resume" - pause alerts</div>
         </div>
         
         <div class="help-item">
@@ -720,11 +720,28 @@
             return;
         }
         
+        // Vision tricks — match before generic "what" so "what color" / "what bill"
+        // aren't eaten by describeArea below.
+        if (text.includes('color') || text.includes('colour')) {
+            webIdentifyColor();
+            return;
+        }
+        if (text.includes('bill') || text.includes('dollar') ||
+            text.includes('money') || text.includes('cash') ||
+            text.includes('currency')) {
+            webIdentifyCurrency();
+            return;
+        }
+        if (text.includes('read')) {
+            webRecognizeText();
+            return;
+        }
+
         if (text.includes('around') || text.includes('describe') || text.includes('what')) {
             describeArea();
             return;
         }
-        
+
         if (text.includes('safe') || text.includes('clear') || text.includes('walk')) {
             checkSafety();
             return;
@@ -1709,7 +1726,162 @@
             speak('Scan complete. No additional hazards detected.', true);
         }
     }
-    
+
+    // ========== VISION TRICKS (read / color / bill) ==========
+    // All three run on-device. Color is pure pixel math; OCR + bill use
+    // Tesseract.js, lazy-loaded on first use.
+
+    function captureFrameCanvas() {
+        const v = state.video;
+        if (!v || !v.videoWidth) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = v.videoWidth;
+        canvas.height = v.videoHeight;
+        canvas.getContext('2d').drawImage(v, 0, 0);
+        return canvas;
+    }
+
+    let _tesseractWorker = null;
+    let _tesseractLoading = null;
+    async function getTesseractWorker() {
+        if (_tesseractWorker) return _tesseractWorker;
+        if (_tesseractLoading) return _tesseractLoading;
+
+        _tesseractLoading = (async () => {
+            try {
+                if (!window.Tesseract) {
+                    await new Promise((resolve, reject) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                        s.onload = resolve;
+                        s.onerror = reject;
+                        document.head.appendChild(s);
+                    });
+                }
+                _tesseractWorker = await window.Tesseract.createWorker('eng');
+                return _tesseractWorker;
+            } catch (e) {
+                console.error('Tesseract load failed:', e);
+                _tesseractLoading = null;
+                return null;
+            }
+        })();
+        return _tesseractLoading;
+    }
+
+    function classifyColorRGB(r, g, b) {
+        // r/g/b in 0..1
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        const l = (maxC + minC) / 2;
+        const delta = maxC - minC;
+
+        if (delta < 0.08) {
+            if (l < 0.12) return 'black';
+            if (l < 0.35) return 'dark gray';
+            if (l < 0.65) return 'gray';
+            if (l < 0.88) return 'light gray';
+            return 'white';
+        }
+
+        let h;
+        if (maxC === r)      h = ((g - b) / delta) + (g < b ? 6 : 0);
+        else if (maxC === g) h = ((b - r) / delta) + 2;
+        else                 h = ((r - g) / delta) + 4;
+        h *= 60;
+
+        const lightPrefix = l < 0.28 ? 'dark ' : (l > 0.78 ? 'light ' : '');
+
+        if (h < 12 || h >= 348) return lightPrefix + 'red';
+        if (h < 40)             return lightPrefix + 'orange';
+        if (h < 65)             return lightPrefix + 'yellow';
+        if (h < 165)            return lightPrefix + 'green';
+        if (h < 200)            return lightPrefix + 'teal';
+        if (h < 255)            return lightPrefix + 'blue';
+        if (h < 290)            return lightPrefix + 'purple';
+        return lightPrefix + 'pink';
+    }
+
+    function webIdentifyColor() {
+        const canvas = captureFrameCanvas();
+        if (!canvas) { speak('Camera not ready.', true); return; }
+
+        const ctx = canvas.getContext('2d');
+        const w = Math.floor(canvas.width * 0.3);
+        const h = Math.floor(canvas.height * 0.3);
+        const x = Math.floor((canvas.width - w) / 2);
+        const y = Math.floor((canvas.height - h) / 2);
+        const data = ctx.getImageData(x, y, w, h).data;
+
+        let rs = 0, gs = 0, bs = 0;
+        const n = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+            rs += data[i]; gs += data[i + 1]; bs += data[i + 2];
+        }
+        const color = classifyColorRGB(rs / n / 255, gs / n / 255, bs / n / 255);
+        speak(`That looks ${color}.`, true);
+    }
+
+    async function webRecognizeText() {
+        const canvas = captureFrameCanvas();
+        if (!canvas) { speak('Camera not ready.', true); return; }
+
+        speak('Reading.', true);
+        const worker = await getTesseractWorker();
+        if (!worker) { speak('Reading not available right now.', true); return; }
+
+        try {
+            const { data } = await worker.recognize(canvas);
+            const text = (data.text || '').trim().replace(/\s+/g, ' ');
+            if (!text) { speak('No text found.', true); return; }
+            const trimmed = text.length > 240 ? text.slice(0, 240) + '…' : text;
+            speak(trimmed, true);
+        } catch (e) {
+            console.error('OCR error:', e);
+            speak('Could not read text.', true);
+        }
+    }
+
+    async function webIdentifyCurrency() {
+        const canvas = captureFrameCanvas();
+        if (!canvas) { speak('Camera not ready.', true); return; }
+
+        speak('Reading bill.', true);
+        const worker = await getTesseractWorker();
+        if (!worker) { speak('Bill reader not available right now.', true); return; }
+
+        try {
+            const { data } = await worker.recognize(canvas);
+            const text = (data.text || '').toUpperCase();
+
+            const hasMarker =
+                text.includes('FEDERAL RESERVE') ||
+                text.includes('UNITED STATES') ||
+                text.includes('DOLLARS');
+
+            const denoms = [
+                { d: '100', w: 'HUNDRED', s: 'one hundred dollars' },
+                { d: '50',  w: 'FIFTY',   s: 'fifty dollars' },
+                { d: '20',  w: 'TWENTY',  s: 'twenty dollars' },
+                { d: '10',  w: 'TEN',     s: 'ten dollars' },
+                { d: '5',   w: 'FIVE',    s: 'five dollars' },
+                { d: '1',   w: 'ONE',     s: 'one dollar' },
+            ];
+
+            for (const { d, w, s } of denoms) {
+                const re = new RegExp(`\\b${d}\\b`);
+                if (re.test(text) && (text.includes(w) || hasMarker)) {
+                    speak(s + '.', true);
+                    return;
+                }
+            }
+            speak('Cannot identify the bill. Hold it flat with the front facing the camera.', true);
+        } catch (e) {
+            console.error('Bill OCR error:', e);
+            speak('Could not read bill.', true);
+        }
+    }
+
     // ========== GESTURES ==========
     function setupGestures() {
         const area = document.getElementById('alertArea');
