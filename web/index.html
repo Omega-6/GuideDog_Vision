@@ -15,7 +15,8 @@
         
         .app { height: 100dvh; display: flex; flex-direction: column; position: relative; }
         
-        /* Camera preview - visible for sighted helpers */
+        /* Camera preview — hidden by default to match the iOS app's
+           battery-saving default. Toggled visible via the CAM button. */
         #video {
             position: absolute;
             top: 0;
@@ -23,6 +24,10 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        #video.cam-on {
             opacity: 0.3;
         }
         
@@ -65,7 +70,35 @@
             font-size: 11px;
             background: rgba(255,255,255,0.2);
         }
-        
+
+        .cam-toggle {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .cam-toggle.on {
+            background: rgba(0, 200, 120, 0.45);
+            border-color: rgba(0, 220, 140, 0.9);
+        }
+
+        .gesture-hint {
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 15px;
+            text-align: center;
+        }
+
         @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         
         /* Alert area */
@@ -128,12 +161,12 @@
             opacity: 0.8;
         }
         
-        /* Direction indicators */
+        /* Direction indicators — hidden to match the iOS app, which conveys
+           direction through spatial audio and the alert box rather than
+           visible chips. Elements stay in the DOM so the existing JS that
+           styles them still runs without errors. */
         .direction-row {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            margin-top: 20px;
+            display: none;
         }
         
         .direction-btn {
@@ -165,8 +198,15 @@
             animation: pulse 0.3s infinite;
         }
         
-        /* Control bar */
+        /* Control bar — hidden to match iOS app's gesture-driven UI.
+           Buttons remain in the DOM so their click handlers stay valid for
+           assistive tech, but the visible UI now mirrors the app. */
         .control-bar {
+            display: none;
+        }
+
+        /* Legacy control bar styles kept for the now-hidden buttons. */
+        .control-bar.legacy-visible {
             padding: 15px;
             padding-bottom: max(15px, env(safe-area-inset-bottom));
             background: rgba(0,0,0,0.85);
@@ -329,10 +369,17 @@
         
         <div class="overlay">
             <div class="status-bar">
-                <div class="status-badge badge-safe" id="statusBadge">SAFE</div>
+                <div class="status-badge badge-safe" id="statusBadge" style="display:none;">SAFE</div>
                 <div class="ai-badge" id="aiBadge">AI Active</div>
+                <button class="cam-toggle" id="btnCam" aria-label="Toggle camera preview on or off">
+                    <svg id="camIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span style="font-size:9px;">CAM</span>
+                </button>
             </div>
-            
+
             <div class="alert-area" id="alertArea">
                 <div class="alert-box safe" id="alertBox" role="alert" aria-live="assertive" aria-atomic="true">
                     <div class="alert-icon" id="alertIcon">OK</div>
@@ -340,7 +387,9 @@
                     <div class="alert-detail" id="alertDetail">Walking is safe</div>
                 </div>
 
-                <div id="debugInfo" style="font-size:10px;color:#888;margin-top:8px;font-family:monospace;text-align:center;"></div>
+                <div class="gesture-hint" id="gestureHint">Tap top to describe · Tap bottom to scan · Swipe for sides</div>
+
+                <div id="debugInfo" style="font-size:10px;color:#888;margin-top:8px;font-family:monospace;text-align:center;display:none;"></div>
 
                 <div class="direction-row">
                     <div class="direction-btn" id="dirLeft">L</div>
@@ -348,7 +397,7 @@
                     <div class="direction-btn" id="dirRight">R</div>
                 </div>
             </div>
-            
+
             <div class="control-bar">
                 <button class="ctrl-btn tall" id="btnDescribe">
                     <span class="icon">?</span>
@@ -1939,10 +1988,25 @@
             }
         }, { passive: true });
         
-        // Buttons
+        // Buttons (hidden by default but kept wired for assistive tech)
         document.getElementById('btnDescribe').addEventListener('click', () => { unlockAudio(); describeArea(); });
         document.getElementById('btnMic').addEventListener('click', () => { unlockAudio(); startListening(); });
         document.getElementById('btnSafe').addEventListener('click', () => { unlockAudio(); checkSafety(); });
+
+        // CAM toggle — mirrors the iOS app's camera preview button.
+        // Off by default to match the app and to save battery. Toggling on
+        // shows a translucent preview, useful for sighted helpers.
+        const camBtn = document.getElementById('btnCam');
+        const videoEl = document.getElementById('video');
+        if (camBtn && videoEl) {
+            camBtn.setAttribute('aria-pressed', 'false');
+            camBtn.addEventListener('click', () => {
+                const turningOn = !camBtn.classList.contains('on');
+                camBtn.classList.toggle('on', turningOn);
+                videoEl.classList.toggle('cam-on', turningOn);
+                camBtn.setAttribute('aria-pressed', turningOn ? 'true' : 'false');
+            });
+        }
     }
     
     // ========== HELP ==========
