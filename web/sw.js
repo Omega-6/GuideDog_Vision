@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v23';
+const CACHE = 'guidedog-v24';     // bumped — colorblind toggle, QR-code UI port, no potted plant
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [
