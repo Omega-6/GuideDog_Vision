@@ -65,7 +65,36 @@
             font-size: 11px;
             background: rgba(255,255,255,0.2);
         }
-        
+
+        .cam-toggle {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .cam-toggle.on {
+            background: rgba(0, 200, 120, 0.45);
+            border-color: rgba(0, 220, 140, 0.9);
+        }
+
+        .gesture-hint {
+            font-size: 12px;
+            color: rgba(255,255,255,0.55);
+            margin-top: 12px;
+            text-align: center;
+            letter-spacing: 0.2px;
+        }
+
         @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         
         /* Alert area */
@@ -280,12 +309,20 @@
     <div class="help" id="privacyNotice" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
         <div class="help-title" id="privacyTitle">Privacy &amp; Permissions</div>
         <div class="help-item">
-            <div class="help-label">Camera &amp; AI Guide</div>
-            <div class="help-desc">GuideDog uses your camera and cloud AI to help you navigate. All detection runs on your device. Photos are processed and immediately discarded.</div>
+            <div class="help-label">Camera</div>
+            <div class="help-desc">GuideDog needs camera access to detect obstacles and read your surroundings. On-device detection runs locally; please allow camera access when prompted.</div>
+        </div>
+        <div class="help-item">
+            <div class="help-label">Microphone &amp; Speech</div>
+            <div class="help-desc">GuideDog uses your microphone for voice commands ("what's around", "what color", "read this"). Speech recognition runs in your browser.</div>
+        </div>
+        <div class="help-item">
+            <div class="help-label">Cloud AI (Optional)</div>
+            <div class="help-desc">When you ask for a detailed scan, a single camera frame may be sent to a cloud AI for scene description. No images are stored after analysis.</div>
         </div>
         <div class="help-item">
             <div class="help-label">No Account Required</div>
-            <div class="help-desc">No personal data collected. No sign-up needed.</div>
+            <div class="help-desc">No personal data is collected. No sign-up needed.</div>
         </div>
         <button class="help-close" id="privacyAccept">I Understand — Continue</button>
         <div style="text-align:center;color:#888;font-size:13px;margin-top:10px;">Tap to hear aloud · Tap again to continue</div>
@@ -293,33 +330,52 @@
 
     <div class="help" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="help-title" id="helpTitle">GuideDog</div>
-        
+
         <div class="help-item">
             <div class="help-label">AUTOMATIC PROTECTION</div>
-            <div class="help-desc">App constantly scans and warns you about obstacles, stairs, walls, doors automatically. You don't need to do anything!</div>
+            <div class="help-desc">GuideDog constantly monitors your surroundings and warns you about obstacles, stairs, walls, and doors. You don't need to do anything — just walk.</div>
         </div>
-        
+
         <div class="help-item">
-            <div class="help-label">Voice Commands (tap mic button)</div>
-            <div class="help-desc">"What's around" - describe area<br>"Is it safe" - check path<br>"Left" / "Right" - check sides<br>"Read this" - read text aloud<br>"What color" - name a color<br>"What bill" - identify US currency<br>"Stop" / "Resume" - pause alerts</div>
+            <div class="help-label">GESTURES</div>
+            <div class="help-desc">
+                <strong>Tap top of screen</strong> — describe surroundings<br>
+                <strong>Tap bottom of screen</strong> — detailed scan<br>
+                <strong>Swipe left or right</strong> — check that side<br>
+                <strong>Hold the screen</strong> — long-press for voice command
+            </div>
         </div>
-        
+
         <div class="help-item">
-            <div class="help-label">Gesture Controls</div>
-            <div class="help-desc">Tap TOP = describe area<br>Tap BOTTOM = detailed scan<br>Swipe LEFT/RIGHT = check sides</div>
+            <div class="help-label">VOICE COMMANDS (tap mic button)</div>
+            <div class="help-desc">
+                "What's around" — describe area<br>
+                "Is it safe" — check path<br>
+                "Left" / "Right" — check sides<br>
+                "Read this" — read text aloud<br>
+                "What color" — name a color<br>
+                "What bill" — identify US currency<br>
+                "Stop" / "Resume" — pause or resume alerts
+            </div>
         </div>
-        
+
         <div class="help-item">
-            <div class="help-label">Alert Sounds</div>
-            <div class="help-desc">Beeps indicate direction of obstacle<br>Fast beeps = DANGER, very close!<br>Vibration = obstacle in your path</div>
+            <div class="help-label">DISTANCE &amp; ALERT SOUNDS</div>
+            <div class="help-desc">Beeps and vibration indicate direction and urgency. Fast beeps = danger, very close. A single soft beep = something to be aware of.</div>
+        </div>
+
+        <div class="help-item">
+            <div class="help-label">CAMERA PREVIEW</div>
+            <div class="help-desc">Tap the CAM button (top right) to make the camera view visible or invisible. Useful for sighted helpers looking at the screen with you.</div>
         </div>
 
         <div class="help-item toggle" id="colorblindToggleItem" role="button" aria-pressed="false">
-            <div class="help-label">Colorblind Mode <span id="cbStatus">— off</span></div>
+            <div class="help-label">COLORBLIND MODE <span id="cbStatus">— off</span></div>
             <div class="help-desc">Tap to switch alert colors to a red-green colorblind-friendly palette.</div>
         </div>
 
-        <button class="help-close" id="helpClose">START - TAP HERE OR SAY "START"</button>
+        <button class="help-close" id="helpClose">START GUIDEDOG</button>
+        <div style="text-align:center;color:#888;font-size:13px;margin-top:10px;">Tap anywhere to start</div>
     </div>
     
     <div class="version-tag" id="versionTag">build 25c-v2</div>
@@ -330,23 +386,32 @@
         <div class="overlay">
             <div class="status-bar">
                 <div class="status-badge badge-safe" id="statusBadge">SAFE</div>
-                <div class="ai-badge" id="aiBadge">AI Active</div>
+                <div class="ai-badge" id="aiBadge" aria-hidden="true">AI Active</div>
+                <button class="cam-toggle" id="btnCam" aria-label="Toggle camera preview on or off">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span style="font-size:9px;">CAM</span>
+                </button>
             </div>
             
             <div class="alert-area" id="alertArea">
                 <div class="alert-box safe" id="alertBox" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="alert-icon" id="alertIcon">OK</div>
+                    <div class="alert-icon" id="alertIcon" aria-hidden="true">OK</div>
                     <div class="alert-text" id="alertText">Path Clear</div>
                     <div class="alert-detail" id="alertDetail">Walking is safe</div>
                 </div>
-
-                <div id="debugInfo" style="font-size:10px;color:#888;margin-top:8px;font-family:monospace;text-align:center;"></div>
 
                 <div class="direction-row">
                     <div class="direction-btn" id="dirLeft">L</div>
                     <div class="direction-btn" id="dirAhead">F</div>
                     <div class="direction-btn" id="dirRight">R</div>
                 </div>
+
+                <div class="gesture-hint" id="gestureHint">Tap top to describe · Tap bottom to scan · Swipe ← → to check sides</div>
+
+                <div id="debugInfo" style="font-size:10px;color:#888;margin-top:8px;font-family:monospace;text-align:center;display:none;"></div>
             </div>
             
             <div class="control-bar">
@@ -1961,6 +2026,26 @@
         fastHazardLoop();
     }
 
+    // ========== CAMERA TOGGLE ==========
+    // The video element sits behind the overlay at opacity 0.3 by default.
+    // Tapping CAM toggles between hidden (0) and visible-for-sighted-helper (0.6).
+    function initCamToggle() {
+        const btn = document.getElementById('btnCam');
+        if (!btn) return;
+        let on = true;  // default state: video visible at 0.3
+        try { on = localStorage.getItem('camOn') !== '0'; } catch (e) {}
+
+        const apply = () => {
+            const v = document.getElementById('video');
+            if (v) v.style.opacity = on ? '0.6' : '0';
+            btn.classList.toggle('on', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            try { localStorage.setItem('camOn', on ? '1' : '0'); } catch (e) {}
+        };
+        apply();
+        btn.addEventListener('click', () => { on = !on; apply(); });
+    }
+
     // ========== COLORBLIND PALETTE ==========
     function setColorblind(enabled) {
         document.body.classList.toggle('colorblind', !!enabled);
@@ -1991,6 +2076,7 @@
         initSpeechRecognition();
         setupGestures();
         initColorblind();
+        initCamToggle();
 
         document.getElementById('helpClose').addEventListener('click', hideHelp);
         const privacyNotice = document.getElementById('privacyNotice');
