@@ -1893,79 +1893,70 @@
         if (!_analyser || !_analyserBuf) return;
         _analyser.getFloatFrequencyData(_analyserBuf);
 
-        // Convert dB bins to linear power
-        // Each bin = sampleRate / fftSize Hz wide (typically ~23 Hz/bin at 48kHz)
+        // Work directly in dB — no linear conversion needed.
+        // From your device data: silence peaks around -73 to -79 dB,
+        // speech/noise peaks around -41 to -55 dB.
+        // SILENCE_FLOOR: bins below this are treated as noise floor, ignored.
+        // ACTIVE_THRESHOLD: peak dB above which we classify the sound.
+        const SILENCE_FLOOR = -100;
+        const ACTIVE_THRESHOLD = -65; // must exceed this to trigger anything
         const binHz = (state.audioCtx.sampleRate || 48000) / _analyser.fftSize;
         const len = _analyserBuf.length;
 
-        let totalPower = 0;
-        // Band power accumulators (sum of linear power per band)
-        let subPower = 0,
-          speechPower = 0,
-          alarmPower = 0,
-          highPower = 0;
-        let subN = 0,
-          speechN = 0,
-          alarmN = 0,
-          highN = 0;
+        // Per-band max dB (not average — peaks are more meaningful than averages in dB)
+        let subMax = -160,
+          speechMax = -160,
+          alarmMax = -160,
+          highMax = -160,
+          overallMax = -160;
+        let activeBins = 0;
 
         for (let i = 1; i < len; i++) {
           const db = _analyserBuf[i];
-          if (db <= -128) continue; // silence bin
-          const lin = Math.pow(10, db / 20); // dB → linear amplitude
+          if (db <= SILENCE_FLOOR) continue;
+          activeBins++;
+          if (db > overallMax) overallMax = db;
           const hz = i * binHz;
-          totalPower += lin;
-
           if (hz < 250) {
-            subPower += lin;
-            subN++;
-          } // rumble / HVAC
-          else if (hz < 3000) {
-            speechPower += lin;
-            speechN++;
-          } // voice (250–3kHz)
-          else if (hz < 5000) {
-            alarmPower += lin;
-            alarmN++;
-          } // alarms / beeps (3–5kHz)
-          else if (hz < 8000) {
-            highPower += lin;
-            highN++;
-          } // sibilance / harmonics
+            if (db > subMax) subMax = db;
+          } else if (hz < 3000) {
+            if (db > speechMax) speechMax = db;
+          } else if (hz < 5000) {
+            if (db > alarmMax) alarmMax = db;
+          } else if (hz < 8000) {
+            if (db > highMax) highMax = db;
+          }
         }
 
-        if (totalPower < 0.005) return; // silence — nothing to report
+        // Nothing above the noise floor — silence
+        if (overallMax < ACTIVE_THRESHOLD) return;
 
-        const speechAvg = speechN ? speechPower / speechN : 0;
-        const alarmAvg = alarmN ? alarmPower / alarmN : 0;
-        const highAvg = highN ? highPower / highN : 0;
-        const totalAvg = totalPower / len;
-
-        // ── Alarm / siren: strong 3–5 kHz energy, often with high harmonics ──
-        if (alarmAvg > 0.08 && alarmAvg > speechAvg * 1.5) {
+        // ── Alarm / siren: strong 3–5 kHz peak, louder than speech band ──
+        if (alarmMax > -60 && alarmMax > speechMax + 5) {
           handleSoundLabel("⚠️ Alarm or siren", "danger");
           return;
         }
-        // ── Dog bark: broadband burst with strong sub + speech band ──
+        // ── Dog bark: broadband burst — sub AND speech both present ──
         if (
-          totalAvg > 0.06 &&
-          subPower > speechPower * 0.4 &&
-          speechAvg > 0.04
+          overallMax > -55 &&
+          subMax > -70 &&
+          speechMax > -70 &&
+          subMax > speechMax - 15
         ) {
           handleSoundLabel("🐕 Dog barking", "warning");
           return;
         }
-        // ── Speech: dominant 250–3kHz, relatively low high-freq ──
+        // ── Speech: dominant 250–3kHz, more energy there than high bands ──
         if (
-          speechAvg > 0.03 &&
-          speechAvg > alarmAvg * 2 &&
-          speechAvg > highAvg
+          speechMax > -65 &&
+          speechMax > alarmMax + 3 &&
+          speechMax > highMax
         ) {
           handleSoundLabel("🗣️ Someone speaking", "info");
           return;
         }
         // ── General loud sound ──
-        if (totalAvg > 0.05) {
+        if (overallMax > -60) {
           handleSoundLabel("🔊 Loud sound nearby", "warning");
         }
       }
