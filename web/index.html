@@ -568,7 +568,7 @@
         // Deepgram (Safari/iOS fallback for live captions)
         // Web Speech API does not work in Safari or any iOS browser.
         // Get a free API key at https://console.deepgram.com then paste it below.
-        DEEPGRAM_API_KEY: 'b926214f10e3faf98043eee42e01bb93d190a23e',
+        DEEPGRAM_API_KEY: 'YOUR_DEEPGRAM_API_KEY_HERE',
     };
     
     // ========== STATE ==========
@@ -922,9 +922,14 @@
     }
 
     // ── Safari/iOS detection ──
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-                     (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream);
-    const hasWebSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition) && !isSafari;
+    // iOS Safari and all iOS browsers (even Chrome on iOS) use WebKit's broken
+    // SpeechRecognition — detect by platform, not by API presence.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSafariBrowser = isIOS || (
+        /^((?!chrome|android).)*safari/i.test(navigator.userAgent) &&
+        typeof navigator.userAgentData === 'undefined'  // Chrome 90+ has this; Safari doesn't
+    );
+    const hasWebSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition) && !isSafariBrowser;
 
     function toggleCaptions() {
         if (hasWebSpeech) {
@@ -999,22 +1004,39 @@
         }
 
         // Open Deepgram WebSocket
-        const url = 'wss://api.deepgram.com/v1/listen?encoding=webm-opus&sample_rate=48000&language=en-US&interim_results=true&punctuate=true';
-        state.deepgramSocket = new WebSocket(url, ['token', CONFIG.DEEPGRAM_API_KEY]);
+        // Safari only supports audio/mp4 (aac), not webm/opus.
+        // Pick the right format based on what MediaRecorder actually supports.
+        const safariMime = 'audio/mp4';
+        const chromeMime = 'audio/webm;codecs=opus';
+        const mime = MediaRecorder.isTypeSupported(chromeMime) ? chromeMime
+                   : MediaRecorder.isTypeSupported(safariMime)  ? safariMime
+                   : '';
+        const encoding = mime.includes('mp4') ? 'linear16' : 'webm-opus';
+        // For Safari/mp4 we use linear16 (raw PCM via AudioWorklet) — see below.
+        // For Chrome/webm we stream the MediaRecorder blob directly.
+        const usePCM = mime.includes('mp4') || mime === '';
+
+        const dgUrl = `wss://api.deepgram.com/v1/listen?encoding=${usePCM ? 'linear16' : 'webm-opus'}&sample_rate=16000&language=en-US&interim_results=true&punctuate=true`;
+        state.deepgramSocket = new WebSocket(dgUrl, ['token', CONFIG.DEEPGRAM_API_KEY]);
 
         state.deepgramSocket.onopen = () => {
-            console.log('Deepgram connected');
+            console.log('Deepgram connected, usePCM:', usePCM, 'mime:', mime);
             speak('Live captions on.', true);
             state.captionFinalText = '';
 
-            // Stream mic audio via MediaRecorder in small chunks
-            state.deepgramRecorder = new MediaRecorder(state.deepgramStream, { mimeType: 'audio/webm;codecs=opus' });
-            state.deepgramRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0 && state.deepgramSocket?.readyState === WebSocket.OPEN) {
-                    state.deepgramSocket.send(e.data);
-                }
-            };
-            state.deepgramRecorder.start(250); // send chunks every 250ms
+            if (usePCM) {
+                // Safari path: capture raw PCM via AudioWorklet and send as Int16 buffers
+                startDeepgramPCM();
+            } else {
+                // Chrome path: stream MediaRecorder webm chunks directly
+                state.deepgramRecorder = new MediaRecorder(state.deepgramStream, { mimeType: mime });
+                state.deepgramRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0 && state.deepgramSocket?.readyState === WebSocket.OPEN) {
+                        state.deepgramSocket.send(e.data);
+                    }
+                };
+                state.deepgramRecorder.start(250);
+            }
         };
 
         state.deepgramSocket.onmessage = (e) => {
@@ -1052,11 +1074,75 @@
         try { state.deepgramRecorder?.stop(); } catch (e) {}
         try { state.deepgramSocket?.close(1000); } catch (e) {}
         try { state.deepgramStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
+        try { state._deepgramWorkletNode?.disconnect(); } catch (e) {}
+        try { state._deepgramSourceNode?.disconnect(); } catch (e) {}
         state.deepgramRecorder = null;
         state.deepgramSocket = null;
         state.deepgramStream = null;
+        state._deepgramWorkletNode = null;
+        state._deepgramSourceNode = null;
         hideCaption();
         speak('Live captions off.', true);
+    }
+
+    // Safari PCM path: use AudioWorklet to capture raw 16-bit PCM and
+    // stream it directly to Deepgram (which expects linear16 @ 16kHz).
+    async function startDeepgramPCM() {
+        try {
+            resumeAudio();
+            if (!state.audioCtx) return;
+
+            // Inline AudioWorklet processor as a blob URL (avoids needing a separate file)
+            const processorCode = `
+                class PCMProcessor extends AudioWorkletProcessor {
+                    constructor() { super(); this._buf = []; this._bufLen = 0; }
+                    process(inputs) {
+                        const ch = inputs[0]?.[0];
+                        if (!ch) return true;
+                        // Downsample from sampleRate to 16000 inline
+                        const ratio = sampleRate / 16000;
+                        for (let i = 0; i < ch.length; i += ratio) {
+                            this._buf.push(ch[Math.floor(i)]);
+                            this._bufLen++;
+                        }
+                        // Send in ~100ms chunks (1600 samples at 16kHz)
+                        if (this._bufLen >= 1600) {
+                            const out = new Float32Array(this._buf.splice(0, 1600));
+                            this._bufLen -= 1600;
+                            this.port.postMessage(out);
+                        }
+                        return true;
+                    }
+                }
+                registerProcessor('pcm-processor', PCMProcessor);
+            `;
+            const blob = new Blob([processorCode], { type: 'application/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+
+            await state.audioCtx.audioWorklet.addModule(blobUrl);
+            URL.revokeObjectURL(blobUrl);
+
+            state._deepgramSourceNode = state.audioCtx.createMediaStreamSource(state.deepgramStream);
+            state._deepgramWorkletNode = new AudioWorkletNode(state.audioCtx, 'pcm-processor');
+
+            state._deepgramWorkletNode.port.onmessage = (e) => {
+                if (state.deepgramSocket?.readyState !== WebSocket.OPEN) return;
+                // Convert Float32 → Int16
+                const float32 = e.data;
+                const int16 = new Int16Array(float32.length);
+                for (let i = 0; i < float32.length; i++) {
+                    int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+                }
+                state.deepgramSocket.send(int16.buffer);
+            };
+
+            state._deepgramSourceNode.connect(state._deepgramWorkletNode);
+            // Don't connect to destination — we don't want to play back the mic
+            console.log('Deepgram PCM streaming started');
+        } catch (e) {
+            console.error('startDeepgramPCM error:', e);
+            speak('Could not start captions. Try reloading the page.', true);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1332,7 +1418,7 @@
 
             // Start interval
             state.yamnetInterval = setInterval(() => {
-                if (state.isRunning && state.yamnetEnabled) runYAMNet();
+                if (state.isRunning && state.yamnetEnabled) startYAMNetRecorder();
             }, CONFIG.YAMNET_INTERVAL);
 
             speak('Sound detection on.', true);
@@ -2238,7 +2324,7 @@
             // Restart sound detection if it was enabled
             if (state.yamnetEnabled && !state.yamnetInterval) {
                 state.yamnetInterval = setInterval(() => {
-                    if (state.isRunning && state.yamnetEnabled) runYAMNet();
+                    if (state.isRunning && state.yamnetEnabled) startYAMNetRecorder();
                 }, CONFIG.YAMNET_INTERVAL);
             }
             // Restart Deepgram if captions were on
