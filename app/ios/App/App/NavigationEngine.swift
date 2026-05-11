@@ -57,6 +57,11 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
     private var sRight: Float?
     private var lastDepthMap: CVPixelBuffer?  // cached for per-object distance sampling
 
+    // Camera-based depth fallback for iPhones without LiDAR.
+    // Loads on demand when hasLiDAR is false; runs Depth-Anything on
+    // captured frames and feeds the same downstream pipeline LiDAR uses.
+    private var depthAnything: DepthAnythingProcessor?
+
     // Latest detections for getDetections() call
     private var latestDetections: [[String: Any]] = []
 
@@ -78,6 +83,18 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             hasLiDAR = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
         }
         print("NavigationEngine: LiDAR=\(hasLiDAR), ARSupported=\(ARWorldTrackingConfiguration.isSupported)")
+
+        // Non-Pro path: spin up Depth-Anything so distance estimation
+        // still works when LiDAR isn't available. The processor's onZones
+        // callback writes into the same sLeft/sCenter/sRight + risk
+        // pipeline LiDAR feeds, so downstream alerts behave identically.
+        if !hasLiDAR {
+            let processor = DepthAnythingProcessor()
+            processor.onZones = { [weak self] leftM, centerM, rightM in
+                self?.applyDepthZones(leftM: leftM, centerM: centerM, rightM: rightM, fromLiDAR: false)
+            }
+            self.depthAnything = processor
+        }
     }
 
     // MARK: - Public Methods
@@ -208,6 +225,11 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             detectionQueue.async { [weak self] in
                 self?.processDepth(depthMap)
             }
+        } else if !hasLiDAR, frameCount % 18 == 0, trackingGood, depthAnything?.isReady == true {
+            // Non-Pro path: Depth-Anything every ~600ms (18 frames @ 30fps).
+            // The processor short-circuits if a prior inference is in flight,
+            // so we don't pile up requests on the Neural Engine.
+            depthAnything?.processFrame(frame.capturedImage)
         }
 
         // LAYER 2: Object detection — Vision + YOLOv8n CoreML (~1.5 FPS)
@@ -339,12 +361,26 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             }
         }
 
-        let alpha: Float = 0.4  // faster response (was 0.2)
         // Center: 20th percentile (biased toward closest obstacle — what you'll walk into)
         // Left/Right: 50th percentile (median — avoids floor/edge noise, gives true side distance)
-        sLeft = smooth(sLeft, getMedian(lefts), alpha)
-        sCenter = smooth(sCenter, getPercentile(centers), alpha)
-        sRight = smooth(sRight, getMedian(rights), alpha)
+        applyDepthZones(
+            leftM:   getMedian(lefts),
+            centerM: getPercentile(centers),
+            rightM:  getMedian(rights),
+            fromLiDAR: true
+        )
+    }
+
+    /// Shared post-sampling pipeline used by both the LiDAR processDepth path
+    /// and the non-Pro DepthAnythingProcessor callback. Takes the
+    /// representative metres per zone (median for L/R, 20th-percentile for C)
+    /// and runs smoothing → hysteresis-aware risk → progressive distance bands
+    /// → feedback dispatch identically regardless of source.
+    private func applyDepthZones(leftM: Float?, centerM: Float?, rightM: Float?, fromLiDAR: Bool) {
+        let alpha: Float = 0.4  // faster response (was 0.2)
+        sLeft = smooth(sLeft, leftM, alpha)
+        sCenter = smooth(sCenter, centerM, alpha)
+        sRight = smooth(sRight, rightM, alpha)
 
         // Hysteresis-aware risk — prevents oscillation at boundaries
         currentRiskL = RiskSolver.analyze(distance: sLeft,   current: currentRiskL)
@@ -363,7 +399,8 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             let cStr = sCenter.map { String(format: "%.2fm", $0) } ?? "---"
             let rStr = sRight.map { String(format: "%.2fm", $0) } ?? "---"
             #if DEBUG
-            print("📏 LIDAR  L:\(lStr)[\(riskString(riskL))]  C:\(cStr)[\(riskString(riskC))]  R:\(rStr)[\(riskString(riskR))]")
+            let src = fromLiDAR ? "LIDAR " : "CAMERA"
+            print("📏 \(src) L:\(lStr)[\(riskString(riskL))]  C:\(cStr)[\(riskString(riskC))]  R:\(rStr)[\(riskString(riskR))]")
             #endif
         }
 
@@ -587,6 +624,19 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
                 }
             } else {
                 dist = zoneDist ?? 5.0
+            }
+
+            // Non-Pro path: feed this size-based distance into the
+            // Depth-Anything calibrator so subsequent depth zones can be
+            // reported in metres. Same logic the web PWA's
+            // updateDepthCalibration uses, just running natively.
+            if !hasLiDAR, let sd = sizeDist {
+                let cx = CGFloat(det.boundingBox.midX)
+                let cy = CGFloat(det.boundingBox.midY)
+                depthAnything?.provideCalibration(
+                    triangulatedDistance: sd,
+                    bboxCenterNormalized: CGPoint(x: cx, y: cy)
+                )
             }
 
             eventData.append(["label": det.label, "confidence": det.confidence, "direction": direction])
