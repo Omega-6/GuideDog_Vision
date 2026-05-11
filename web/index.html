@@ -1184,6 +1184,11 @@
       integrity="sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre"
       crossorigin="anonymous"
     ></script>
+    <!-- TF CPU backend — used as fallback when WebGL unavailable (e.g. desktop DevTools) -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-cpu@4.22.0/dist/tf-backend-cpu.min.js"
+      crossorigin="anonymous"
+    ></script>
     <script
       src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
       integrity="sha384-7qLdgfEQyO9ZQi9ArRHigK+IBto4XPk468jAqc+fnsXaZIcMAhQeLwzggRK7aESl"
@@ -1835,13 +1840,79 @@
 
       async function loadYAMNet() {
         if (state.yamnetModel) return true;
-        // Use Web Audio frequency analysis — no model download needed, works on all devices.
-        // This is faster, more reliable, and avoids WebGL/CORS issues entirely.
-        console.log("Sound detection: using Web Audio frequency analyser");
-        state.yamnetModel = "energy-fallback";
         const badge = document.getElementById("aiBadge");
+        if (badge) badge.textContent = "Loading sound model…";
+
+        // Force CPU backend if WebGL is unavailable (desktop DevTools, some devices).
+        // On mobile Chrome/Safari WebGL works fine and the faster GPU backend is used.
+        try {
+          await tf.ready();
+          if (tf.getBackend() !== "webgl") {
+            console.log("WebGL unavailable, switching TF to CPU backend");
+            await tf.setBackend("cpu");
+            await tf.ready();
+          }
+          console.log("TF backend:", tf.getBackend());
+        } catch (e) {
+          console.warn("TF backend setup error:", e.message);
+        }
+
+        // YAMNet model URLs — tried in order until one works.
+        // The tfhub-tfjs-modules bucket is the most reliable CORS-friendly source.
+        const MODEL_URLS = [
+          "https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1/model.json?tfjs-format=file",
+          "https://storage.googleapis.com/tfhub-tfjs-modules/google/tfjs-model/yamnet/tfjs/1/model.json",
+          "https://cdn.jsdelivr.net/gh/google-coral/edgetpu-platforms@main/yamnet/model.json",
+        ];
+
+        for (const url of MODEL_URLS) {
+          try {
+            console.log("Trying YAMNet from:", url);
+            state.yamnetModel = await tf.loadGraphModel(url);
+            console.log(
+              "YAMNet loaded from:",
+              url,
+              "| backend:",
+              tf.getBackend(),
+            );
+            loadYAMNetClasses();
+            break;
+          } catch (e) {
+            console.warn("YAMNet failed from", url, "–", e.message);
+            state.yamnetModel = null;
+          }
+        }
+
+        if (!state.yamnetModel) {
+          console.warn(
+            "YAMNet model unavailable — using frequency analyser fallback",
+          );
+          state.yamnetModel = "energy-fallback";
+        }
+
         if (badge) badge.textContent = "AI + Sound Active";
         return true;
+      }
+
+      // YAMNet class names — loaded in background after model ready
+      let _yamnetClasses = null;
+      async function loadYAMNetClasses() {
+        try {
+          const r = await fetch(
+            "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv",
+            { cache: "force-cache" },
+          );
+          if (!r.ok) return;
+          const csv = await r.text();
+          _yamnetClasses = csv
+            .split("\n")
+            .slice(1)
+            .filter(Boolean)
+            .map((line) => (line.split(",")[2] || "").replace(/"/g, "").trim());
+          console.log("YAMNet classes loaded:", _yamnetClasses.length);
+        } catch (e) {
+          console.warn("YAMNet class fetch failed:", e.message);
+        }
       }
 
       // ── Web Audio analyser state ──
@@ -1864,6 +1935,115 @@
         } catch (e) {
           console.warn("Analyser init error:", e);
         }
+      }
+
+      // ── YAMNet inference — runs on mobile where WebGL works ──
+      // Records a 1-second audio chunk via MediaRecorder, decodes to PCM,
+      // resamples to 16kHz, and runs YAMNet inference.
+      let _yamnetRecorder = null;
+      let _yamnetChunks = [];
+      let _yamnetInferring = false;
+
+      function startYAMNetCapture() {
+        if (!state.yamnetMicStream || _yamnetInferring) return;
+        if (_yamnetRecorder && _yamnetRecorder.state === "recording") return;
+        try {
+          const mime =
+            ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", ""].find(
+              (t) => !t || MediaRecorder.isTypeSupported(t),
+            ) || "";
+          _yamnetRecorder = new MediaRecorder(
+            state.yamnetMicStream,
+            mime ? { mimeType: mime } : {},
+          );
+          _yamnetChunks = [];
+          _yamnetRecorder.ondataavailable = (e) => {
+            if (e.data?.size > 0) _yamnetChunks.push(e.data);
+          };
+          _yamnetRecorder.onstop = () => inferYAMNet();
+          _yamnetRecorder.start();
+          setTimeout(() => {
+            try {
+              if (_yamnetRecorder?.state === "recording")
+                _yamnetRecorder.stop();
+            } catch (e) {}
+          }, 975);
+        } catch (e) {
+          console.warn("YAMNet capture error:", e);
+        }
+      }
+
+      async function inferYAMNet() {
+        if (_yamnetInferring || !_yamnetChunks.length) return;
+        _yamnetInferring = true;
+        try {
+          const blob = new Blob(_yamnetChunks, {
+            type: _yamnetRecorder?.mimeType || "audio/webm",
+          });
+          _yamnetChunks = [];
+          const arrayBuf = await blob.arrayBuffer();
+          const audioBuf = await state.audioCtx.decodeAudioData(arrayBuf);
+          const samples = audioBuf.getChannelData(0);
+          const resampled = resampleTo16k(samples, audioBuf.sampleRate);
+          if (resampled.length < 15600) {
+            _yamnetInferring = false;
+            return;
+          }
+
+          const waveform = tf.tensor1d(resampled);
+          const output = await state.yamnetModel.executeAsync(waveform);
+          waveform.dispose();
+
+          const scoresT = Array.isArray(output) ? output[0] : output;
+          const meanT = tf.mean(scoresT, 0);
+          const scores = await meanT.data();
+          meanT.dispose();
+          if (Array.isArray(output)) output.forEach((t) => t?.dispose?.());
+          else output?.dispose?.();
+
+          handleYAMNetScores(scores);
+        } catch (e) {
+          console.warn("YAMNet inference error:", e.message);
+        }
+        _yamnetInferring = false;
+      }
+
+      function resampleTo16k(input, srcRate) {
+        if (srcRate === 16000) return input;
+        const ratio = srcRate / 16000;
+        const outLen = Math.round(input.length / ratio);
+        const out = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i * ratio;
+          const idx = Math.floor(pos);
+          const frac = pos - idx;
+          out[i] =
+            idx + 1 < input.length
+              ? input[idx] * (1 - frac) + input[idx + 1] * frac
+              : input[Math.min(idx, input.length - 1)];
+        }
+        return out;
+      }
+
+      function handleYAMNetScores(scores) {
+        let bestLabel = null,
+          bestScore = 0.12,
+          bestUrgency = "info";
+        for (let i = 0; i < scores.length; i++) {
+          if (scores[i] < bestScore) continue;
+          const cls = (_yamnetClasses?.[i] || "").toLowerCase();
+          for (const [fragment, info] of Object.entries(
+            CONFIG.SOUND_CATEGORIES,
+          )) {
+            if (cls.includes(fragment.toLowerCase())) {
+              bestLabel = info.label;
+              bestUrgency = info.urgency;
+              bestScore = scores[i];
+              break;
+            }
+          }
+        }
+        if (bestLabel) handleSoundLabel(bestLabel, bestUrgency);
       }
 
       function runEnergyFallback(samples) {
@@ -2025,18 +2205,33 @@
 
           await loadYAMNet();
 
-          // Init the Web Audio frequency analyser now that we have the mic stream
-          initAnalyser();
+          await loadYAMNet();
+          initAnalyser(); // always init analyser as fallback
 
-          // Poll the analyser every second — much lighter than MediaRecorder chunks
-          state.yamnetInterval = setInterval(() => {
-            if (state.yamnetEnabled) runFrequencyAnalysis();
-          }, CONFIG.YAMNET_INTERVAL);
+          if (state.yamnetModel && state.yamnetModel !== "energy-fallback") {
+            // Full YAMNet ML inference — runs on mobile where WebGL works
+            console.log("Using YAMNet ML inference");
+            state.yamnetInterval = setInterval(() => {
+              if (state.yamnetEnabled) startYAMNetCapture();
+            }, CONFIG.YAMNET_INTERVAL);
+          } else {
+            // Frequency analyser fallback — works everywhere without WebGL
+            console.log("Using frequency analyser fallback");
+            state.yamnetInterval = setInterval(() => {
+              if (state.yamnetEnabled) runFrequencyAnalysis();
+            }, CONFIG.YAMNET_INTERVAL);
+          }
 
           speak("Sound detection on.", true);
         } else {
           clearInterval(state.yamnetInterval);
           state.yamnetInterval = null;
+          // Tear down YAMNet recorder
+          try {
+            if (_yamnetRecorder?.state === "recording") _yamnetRecorder.stop();
+          } catch (e) {}
+          _yamnetRecorder = null;
+          _yamnetChunks = [];
           // Tear down analyser
           try {
             if (_analyser) _analyser.disconnect();
