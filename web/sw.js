@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v30';     // bumped — streaming cloud AI client
+const CACHE = 'guidedog-v31';     // bumped — stairs caution + shorter danger linger
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [

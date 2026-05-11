@@ -1336,10 +1336,12 @@
             return { level: 'clear' };
         }
 
-        // DANGER: stairs / drop-offs (falling hazard — highest priority)
+        // WARNING: stairs / drop-offs. The user navigates stairs deliberately
+        // once they know they're there — they shouldn't be alarmed as STOP-
+        // level. Caution wording prompts them to slow and feel for the edge.
         if (/stair|step\s*down|steps\s*down|drop.?off|ledge|descend|going\s*down/.test(lower)) {
-            return { level: 'danger', key: 'stairs', label: 'STAIRS', uiDetail: 'Stop — stairs or drop-off',
-                speak: 'Stairs ahead. Stop.' };
+            return { level: 'warning', key: 'stairs', label: 'STAIRS', uiDetail: 'Caution — stairs or drop-off',
+                speak: 'Caution. Stairs ahead.' };
         }
 
         // DANGER: moving vehicles / cyclists
@@ -2075,7 +2077,14 @@
                     return;
                 }
 
-                const ttl = hazard.level === 'danger' ? 4000 : 3000;
+                // TTL tuned to clear quickly once the user has moved past.
+                // The fast loop holds the UI at this hazard level until the
+                // hazard expires, so long TTLs make the danger banner linger
+                // even after local detection says the path is clear. The
+                // background scan re-fires every 5s; if the hazard is still
+                // there it gets re-armed, so a short TTL doesn't cause us to
+                // miss anything persistent.
+                const ttl = hazard.level === 'danger' ? 2000 : 1500;
                 state.aiHazard = { ...hazard, expiry: Date.now() + ttl };
 
                 // Speak cloud AI results directly — it's our guide on web
