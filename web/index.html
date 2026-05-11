@@ -493,6 +493,33 @@
                     "fire hydrant", "stop sign", "parking meter", "laptop", "tv"]
     };
 
+    // ========== PERF DIAGNOSTIC INFO ==========
+    // Populated when the depth pipeline loads. Surfaced via the HUD so we
+    // can read it on the phone without opening a desktop devtools console.
+    const PerfDiag = {
+        device: '?',
+        concurrency: navigator.hardwareConcurrency || '?',
+        crossOriginIsolated: typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : '?',
+        sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+        onnxRequested: null,
+        sessionProviders: null
+    };
+
+    // Simplify the user-agent for display. iOS Safari UAs are long; pull
+    // out the bits that actually identify the device class.
+    (function () {
+        const ua = navigator.userAgent || '';
+        let device = ua;
+        const iPad = /iPad/.test(ua);
+        const iPhone = /iPhone/.test(ua);
+        const iOS = (ua.match(/OS (\d+)_(\d+)/) || [])[0];
+        if (iPad)        device = 'iPad' + (iOS ? ' ' + iOS.replace('OS ', 'iOS ').replace('_', '.') : '');
+        else if (iPhone) device = 'iPhone' + (iOS ? ' ' + iOS.replace('OS ', 'iOS ').replace('_', '.') : '');
+        else if (/Android/.test(ua)) device = 'Android';
+        else if (/Macintosh/.test(ua)) device = 'Mac';
+        PerfDiag.device = device;
+    })();
+
     // ========== PERF INSTRUMENTATION ==========
     // Lightweight rolling-window timing tracker. Enabled via ?debug=1 URL
     // parameter or by triple-tapping the version tag. Zero overhead when
@@ -558,6 +585,19 @@
             },
             render() {
                 if (!enabled) return '';
+                const lines = [];
+                // Header: environment + ONNX backend config so we don't need
+                // a desktop console to read it.
+                lines.push(`device: ${PerfDiag.device}  cpu: ${PerfDiag.concurrency}  isolated: ${PerfDiag.crossOriginIsolated}  SAB: ${PerfDiag.sharedArrayBuffer}`);
+                if (PerfDiag.onnxRequested) {
+                    const r = PerfDiag.onnxRequested;
+                    lines.push(`onnx req: proxy=${r.proxy}  simd=${r.simd}  threads=${r.numThreads}`);
+                }
+                if (PerfDiag.sessionProviders) {
+                    lines.push(`onnx providers: ${JSON.stringify(PerfDiag.sessionProviders)}`);
+                }
+                lines.push('-'.repeat(50));
+
                 const rows = [];
                 const names = new Set([...Object.keys(samples), ...Object.keys(intervals)]);
                 for (const name of names) {
@@ -568,7 +608,7 @@
                     rows.push(`${name.padEnd(20)} med ${med}ms  p95 ${p95}ms  n=${s.n}`);
                 }
                 rows.sort();
-                return rows.join('\n');
+                return lines.concat(rows).join('\n');
             }
         };
     })();
@@ -1405,6 +1445,11 @@
                     info.outputNames = session.outputNames || null;
                 }
                 console.log('[Perf] Depth backend info:', JSON.stringify(info, null, 2));
+
+                // Surface the key bits into PerfDiag so the HUD can show them
+                // without anyone needing to open a desktop devtools console.
+                PerfDiag.onnxRequested = info.onnxWasmRequested;
+                PerfDiag.sessionProviders = info.sessionProviders;
             } catch (e) {
                 console.warn('[Perf] Could not introspect depth backend:', e.message || e);
             }
