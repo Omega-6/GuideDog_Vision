@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v27';     // bumped — deeper depth instrumentation (stages + warm bucket)
+const CACHE = 'guidedog-v28';     // bumped — ONNX proxy to worker + diagnostic logging
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [

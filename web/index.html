@@ -1333,7 +1333,35 @@
 
         try {
             const env = window.__txEnv;
-            if (env) env.allowLocalModels = false;
+            if (env) {
+                env.allowLocalModels = false;
+
+                // Move ONNX Runtime off the main thread. With proxy = true,
+                // Transformers.js spawns a Web Worker and runs all inference
+                // there. The main thread stays responsive even when a single
+                // inference is slow.
+                if (env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+                    try {
+                        env.backends.onnx.wasm.proxy = true;
+                    } catch (e) { console.warn('[Perf] proxy=true rejected:', e.message); }
+
+                    // Explicitly request SIMD. Auto-detection usually picks
+                    // this up but being explicit removes one failure mode.
+                    try {
+                        env.backends.onnx.wasm.simd = true;
+                    } catch (e) { console.warn('[Perf] simd=true rejected:', e.message); }
+
+                    // Request multi-threaded WASM. This requires
+                    // crossOriginIsolated (COOP/COEP headers). On plain
+                    // GitHub Pages it will silently fall back to 1 thread,
+                    // which is exactly what we want — try the faster path,
+                    // accept the slower one if not available.
+                    try {
+                        const threads = Math.min(4, navigator.hardwareConcurrency || 1);
+                        env.backends.onnx.wasm.numThreads = threads;
+                    } catch (e) { console.warn('[Perf] numThreads rejected:', e.message); }
+                }
+            }
             if (badge) badge.textContent = 'Downloading depth model…';
             state.depthPipeline = await window.__txPipeline(
                 'depth-estimation', 'Xenova/depth-anything-small-hf', { quantized: true }
@@ -1342,12 +1370,21 @@
             console.log('Transformers.js depth model ready');
 
             // Deep-instrumentation log: dump everything we can find out about
-            // which ONNX backend ended up running the model. Helps diagnose
-            // whether WASM SIMD / WebGPU / plain WASM is in use.
+            // which ONNX backend ended up running the model AND about the
+            // environment that constrains it. Helps diagnose whether SIMD /
+            // multi-threading / WebGPU is actually in use, vs silently
+            // falling back to single-threaded plain WASM.
             try {
                 const info = {
+                    // Browser / device context
+                    userAgent: navigator.userAgent,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    crossOriginIsolated: typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : null,
+                    sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+                    deviceMemory: navigator.deviceMemory || null,
+                    // Transformers.js env config (what we asked for)
                     backends: env && env.backends ? Object.keys(env.backends) : null,
-                    onnxWasm: env && env.backends && env.backends.onnx && env.backends.onnx.wasm
+                    onnxWasmRequested: env && env.backends && env.backends.onnx && env.backends.onnx.wasm
                         ? {
                             numThreads: env.backends.onnx.wasm.numThreads,
                             simd: env.backends.onnx.wasm.simd,
