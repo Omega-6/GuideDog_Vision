@@ -345,9 +345,179 @@
         body.colorblind .alert-box.danger  { background: rgba(60, 25, 0, 0.9);    border-color: #D55E00; }
         body.colorblind .direction-btn.active { border-color: #E69F00; background: rgba(230, 159, 0, 0.30); }
         body.colorblind .direction-btn.danger { border-color: #D55E00; background: rgba(213, 94, 0, 0.40); }
+
+        /* ── MODE SELECT SCREEN ── */
+        #modeSelect {
+            position: fixed; inset: 0; background: #000;
+            z-index: 200; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 30px 24px;
+            padding-top: max(40px, env(safe-area-inset-top));
+            padding-bottom: max(30px, env(safe-area-inset-bottom));
+        }
+        #modeSelect.hidden { display: none; }
+
+        .mode-logo {
+            font-size: 42px; font-weight: 900; letter-spacing: -1px;
+            color: #fff; margin-bottom: 6px; text-align: center;
+        }
+        .mode-logo span { color: #0f8; }
+        .mode-tagline {
+            font-size: 15px; color: rgba(255,255,255,0.5);
+            margin-bottom: 48px; text-align: center;
+        }
+
+        .mode-cards { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 360px; }
+
+        .mode-card {
+            border: none; border-radius: 22px; padding: 28px 24px;
+            display: flex; flex-direction: column; align-items: flex-start;
+            gap: 8px; cursor: pointer; text-align: left;
+            transition: transform 0.15s, box-shadow 0.15s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mode-card:active { transform: scale(0.97); }
+
+        .mode-card.guide {
+            background: linear-gradient(135deg, #0a2a1a 0%, #0d3d22 100%);
+            border: 2px solid rgba(0,255,136,0.35);
+            box-shadow: 0 4px 30px rgba(0,255,136,0.12);
+        }
+        .mode-card.guide:active { box-shadow: 0 2px 15px rgba(0,255,136,0.2); }
+
+        .mode-card.assist {
+            background: linear-gradient(135deg, #0d1a30 0%, #132240 100%);
+            border: 2px solid rgba(80,160,255,0.35);
+            box-shadow: 0 4px 30px rgba(80,160,255,0.12);
+        }
+        .mode-card.assist:active { box-shadow: 0 2px 15px rgba(80,160,255,0.2); }
+
+        .mode-card-icon { font-size: 38px; margin-bottom: 4px; }
+        .mode-card-title { font-size: 22px; font-weight: 800; color: #fff; }
+        .mode-card-desc { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.45; }
+
+        .mode-card.guide .mode-card-title { color: #0f8; }
+        .mode-card.assist .mode-card-title { color: #68b4ff; }
+
+        .mode-card-tags {
+            display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+        }
+        .mode-tag {
+            font-size: 11px; font-weight: 700; padding: 3px 9px;
+            border-radius: 20px; letter-spacing: 0.3px;
+        }
+        .mode-card.guide  .mode-tag { background: rgba(0,255,136,0.15); color: #0f8; }
+        .mode-card.assist .mode-tag { background: rgba(80,160,255,0.15); color: #68b4ff; }
+
+        /* Assist mode screen — replaces main app UI */
+        #assistScreen {
+            position: fixed; inset: 0; background: #000;
+            z-index: 30; display: none; flex-direction: column;
+        }
+        #assistScreen.visible { display: flex; }
+
+        .assist-bar {
+            padding: 15px;
+            padding-top: max(15px, env(safe-area-inset-top));
+            background: rgba(0,0,0,0.9);
+            display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .assist-back {
+            width: 40px; height: 40px; border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.1);
+            color: #fff; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .assist-title { font-size: 17px; font-weight: 700; color: #fff; flex: 1; }
+
+        .assist-body {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 30px 24px; gap: 20px;
+        }
+        .assist-status {
+            width: 100%; max-width: 360px; border-radius: 18px;
+            padding: 22px 20px; text-align: center;
+            background: rgba(255,255,255,0.05);
+            border: 1.5px solid rgba(255,255,255,0.1);
+        }
+        .assist-status-icon { font-size: 44px; margin-bottom: 8px; }
+        .assist-status-text { font-size: 18px; font-weight: 700; color: #fff; }
+        .assist-status-sub  { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 5px; }
+
+        .assist-btns {
+            display: flex; gap: 14px; width: 100%; max-width: 360px;
+        }
+        .assist-btn {
+            flex: 1; border-radius: 16px; padding: 20px 10px;
+            border: none; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 7px;
+            font-size: 13px; font-weight: 700; color: #fff;
+            transition: transform 0.12s;
+        }
+        .assist-btn:active { transform: scale(0.95); }
+        .assist-btn-icon { font-size: 28px; }
+        .assist-btn.cc-btn  { background: rgba(80,160,255,0.25); border: 2px solid rgba(80,160,255,0.5); }
+        .assist-btn.snd-btn { background: rgba(80,200,120,0.25); border: 2px solid rgba(80,200,120,0.5); }
+        .assist-btn.cc-btn.on  { background: rgba(80,160,255,0.5); border-color: rgba(100,180,255,0.9); }
+        .assist-btn.snd-btn.on { background: rgba(80,200,120,0.5); border-color: rgba(100,220,140,0.9); }
+
+        .assist-hint {
+            font-size: 13px; color: rgba(255,255,255,0.35); text-align: center; max-width: 300px;
+        }
     </style>
 </head>
 <body>
+    <!-- ── MODE SELECT ── -->
+    <div id="modeSelect">
+        <div class="mode-logo">Guide<span>Dog</span></div>
+        <div class="mode-tagline">Choose your mode to get started</div>
+        <div class="mode-cards">
+            <button class="mode-card guide" id="btnModeGuide" aria-label="GuideDog navigation mode">
+                <div class="mode-card-icon">🦮</div>
+                <div class="mode-card-title">GuideDog</div>
+                <div class="mode-card-desc">Obstacle detection, AI guidance, and real-time hazard alerts to help you navigate safely.</div>
+                <div class="mode-card-tags">
+                    <span class="mode-tag">Obstacle Detection</span>
+                    <span class="mode-tag">AI Guide</span>
+                    <span class="mode-tag">Voice Commands</span>
+                </div>
+            </button>
+            <button class="mode-card assist" id="btnModeAssist" aria-label="Sound and caption assist mode">
+                <div class="mode-card-icon">👂</div>
+                <div class="mode-card-title">Sound &amp; Captions</div>
+                <div class="mode-card-desc">Live closed captions for speech nearby, plus automatic detection of alarms, sirens, dogs, and more.</div>
+                <div class="mode-card-tags">
+                    <span class="mode-tag">Live Captions</span>
+                    <span class="mode-tag">Sound Detection</span>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── ASSIST MODE SCREEN ── -->
+    <div id="assistScreen" role="main" aria-label="Sound and Captions mode">
+        <div class="assist-bar">
+            <button class="assist-back" id="btnAssistBack" aria-label="Back to home">&#8592;</button>
+            <div class="assist-title">Sound &amp; Captions</div>
+            <button class="cc-toggle on" id="btnAssistCC" aria-label="Toggle live captions" aria-pressed="true" title="Closed Captions">
+                <span style="font-size:15px;font-weight:800;">CC</span>
+            </button>
+            <button class="snd-toggle" id="btnAssistSnd" aria-label="Toggle sound detection" aria-pressed="false" title="Sound Detection">🔊</button>
+        </div>
+        <div class="assist-body">
+            <div class="assist-status" id="assistStatus">
+                <div class="assist-status-icon">🎤</div>
+                <div class="assist-status-text" id="assistStatusText">Captions ready</div>
+                <div class="assist-status-sub" id="assistStatusSub">Speak and text will appear below</div>
+            </div>
+            <div class="assist-hint">Captions appear at the bottom of the screen. Sound alerts pop up automatically.</div>
+        </div>
+    </div>
+
     <div class="loading" id="loading">
         <div class="loading-spinner"></div>
         <div class="loading-text" id="loadingText">Loading, please wait a moment</div>
@@ -413,6 +583,7 @@
         </div>
 
         <button class="help-close" id="helpClose">START - TAP HERE OR SAY "START"</button>
+        <button class="help-close" id="helpBackToHome" style="margin-top:10px;background:rgba(255,255,255,0.12);font-size:15px;">← Back to Mode Select</button>
     </div>
     
     <div class="version-tag" id="versionTag">build 25d-v1</div>
@@ -565,9 +736,6 @@
         // Caption
         CAPTION_HIDE_DELAY: 5000,      // hide caption box after 5s of silence
 
-        // Deepgram (Safari/iOS fallback for live captions)
-        // Web Speech API does not work in Safari or any iOS browser.
-        // Get a free API key at https://console.deepgram.com then paste it below.
         DEEPGRAM_API_KEY: 'YOUR_DEEPGRAM_API_KEY_HERE',
     };
     
@@ -601,6 +769,7 @@
         lastAlertSound: 0,
         lastDangerAnnounce: 0,
         
+        appMode: null,   // 'guide' | 'assist'
         recognition: null,
         isListening: false,
         
@@ -620,10 +789,7 @@
         captionHideTimer: null,
         captionFinalText: '',
 
-        // ── Deepgram (Safari fallback) ──
-        deepgramSocket: null,
-        deepgramStream: null,
-        deepgramRecorder: null,
+
     };
     
     // ========== AUDIO ==========
@@ -881,13 +1047,11 @@
                 return;
             }
             if (e.error === 'service-not-allowed') {
-                // Safari: Siri disabled or speech recognition restricted by the OS.
-                // Fall back to Deepgram silently.
-                console.warn('Web Speech service-not-allowed — switching to Deepgram');
+                // Safari: Siri/Speech Recognition restricted — tell the user
                 state.captionEnabled = false;
-                state.captionRecognition = null;
-                // Re-trigger via Deepgram path
-                toggleCaptionsDeepgram();
+                const btn = document.getElementById('btnCC');
+                if (btn) { btn.classList.remove('on'); btn.setAttribute('aria-pressed', 'false'); }
+                speak('Speech recognition is not available. On iPhone, make sure Siri is enabled in Settings.', true);
                 return;
             }
             console.warn('Caption recognition error:', e.error);
@@ -932,29 +1096,10 @@
         return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
-    // ── Browser capability detection ──
-    const hasWebSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-
     function toggleCaptions() {
-        if (hasWebSpeech) {
-            // Web Speech API available (Chrome, Edge, Safari 14.1+) — try it first, free
-            toggleCaptionsWebSpeech();
-        } else {
-            // No Web Speech API at all — fall back to Deepgram
-            toggleCaptionsDeepgram();
-        }
-    }
-
-    // ── Web Speech API captions (Chrome/Edge/Safari) ──
-    function toggleCaptionsWebSpeech() {
         if (!state.captionRecognition) {
             const ok = initCaptionRecognition();
-            if (!ok) {
-                // Web Speech API present but failed to init — fall back to Deepgram
-                console.warn('Web Speech init failed, falling back to Deepgram');
-                toggleCaptionsDeepgram();
-                return;
-            }
+            if (!ok) { speak('Captions not supported on this device.', true); return; }
         }
 
         state.captionEnabled = !state.captionEnabled;
@@ -968,196 +1113,13 @@
                 if (state.isListening) stopListening();
                 state.captionRecognition.start();
             } catch (e) {
-                console.warn('Caption start error, falling back to Deepgram:', e);
-                // Reset and try Deepgram instead
-                state.captionEnabled = false;
-                btn.classList.remove('on');
-                btn.setAttribute('aria-pressed', 'false');
-                state.captionRecognition = null;
-                toggleCaptionsDeepgram();
-                return;
+                console.warn('Caption start error:', e);
             }
             speak('Live captions on.', true);
         } else {
             try { state.captionRecognition.stop(); } catch (e) {}
             hideCaption();
             speak('Live captions off.', true);
-        }
-    }
-
-    // ── Deepgram captions (fallback when Web Speech API unavailable or fails) ──
-    function toggleCaptionsDeepgram() {
-        state.captionEnabled = !state.captionEnabled;
-        const btn = document.getElementById('btnCC');
-        btn.classList.toggle('on', state.captionEnabled);
-        btn.setAttribute('aria-pressed', state.captionEnabled ? 'true' : 'false');
-
-        if (state.captionEnabled) {
-            startDeepgramCaptions();
-        } else {
-            stopDeepgramCaptions();
-        }
-    }
-
-    async function startDeepgramCaptions() {
-        if (!CONFIG.DEEPGRAM_API_KEY || CONFIG.DEEPGRAM_API_KEY === 'YOUR_DEEPGRAM_API_KEY_HERE') {
-            speak('Deepgram API key not set. Captions unavailable in Safari.', true);
-            state.captionEnabled = false;
-            const btn = document.getElementById('btnCC');
-            btn.classList.remove('on');
-            btn.setAttribute('aria-pressed', 'false');
-            return;
-        }
-
-        try {
-            // Get microphone access
-            state.deepgramStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch (e) {
-            speak('Microphone permission denied.', true);
-            state.captionEnabled = false;
-            document.getElementById('btnCC').classList.remove('on');
-            return;
-        }
-
-        // Open Deepgram WebSocket
-        // Safari only supports audio/mp4 (aac), not webm/opus.
-        // Pick the right format based on what MediaRecorder actually supports.
-        const safariMime = 'audio/mp4';
-        const chromeMime = 'audio/webm;codecs=opus';
-        const mime = MediaRecorder.isTypeSupported(chromeMime) ? chromeMime
-                   : MediaRecorder.isTypeSupported(safariMime)  ? safariMime
-                   : '';
-        const encoding = mime.includes('mp4') ? 'linear16' : 'webm-opus';
-        // For Safari/mp4 we use linear16 (raw PCM via AudioWorklet) — see below.
-        // For Chrome/webm we stream the MediaRecorder blob directly.
-        const usePCM = mime.includes('mp4') || mime === '';
-
-        const dgUrl = `wss://api.deepgram.com/v1/listen?encoding=${usePCM ? 'linear16' : 'webm-opus'}&sample_rate=16000&language=en-US&interim_results=true&punctuate=true`;
-        state.deepgramSocket = new WebSocket(dgUrl, ['token', CONFIG.DEEPGRAM_API_KEY]);
-
-        state.deepgramSocket.onopen = () => {
-            console.log('Deepgram connected, usePCM:', usePCM, 'mime:', mime);
-            speak('Live captions on.', true);
-            state.captionFinalText = '';
-
-            if (usePCM) {
-                // Safari path: capture raw PCM via AudioWorklet and send as Int16 buffers
-                startDeepgramPCM();
-            } else {
-                // Chrome path: stream MediaRecorder webm chunks directly
-                state.deepgramRecorder = new MediaRecorder(state.deepgramStream, { mimeType: mime });
-                state.deepgramRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0 && state.deepgramSocket?.readyState === WebSocket.OPEN) {
-                        state.deepgramSocket.send(e.data);
-                    }
-                };
-                state.deepgramRecorder.start(250);
-            }
-        };
-
-        state.deepgramSocket.onmessage = (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                const transcript = data?.channel?.alternatives?.[0]?.transcript;
-                if (!transcript) return;
-                const isFinal = data.is_final;
-                if (isFinal) {
-                    state.captionFinalText = (state.captionFinalText + transcript + ' ').slice(-300);
-                    showCaption(state.captionFinalText, '');
-                } else {
-                    showCaption(state.captionFinalText, transcript);
-                }
-            } catch (err) {
-                console.warn('Deepgram message parse error:', err);
-            }
-        };
-
-        state.deepgramSocket.onerror = (e) => {
-            console.warn('Deepgram WebSocket error:', e);
-        };
-
-        state.deepgramSocket.onclose = (e) => {
-            console.log('Deepgram closed, code:', e.code);
-            // Auto-reconnect if captions still enabled and it wasn't a clean close
-            if (state.captionEnabled && e.code !== 1000) {
-                console.log('Deepgram reconnecting...');
-                setTimeout(startDeepgramCaptions, 1000);
-            }
-        };
-    }
-
-    function stopDeepgramCaptions() {
-        try { state.deepgramRecorder?.stop(); } catch (e) {}
-        try { state.deepgramSocket?.close(1000); } catch (e) {}
-        try { state.deepgramStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
-        try { state._deepgramWorkletNode?.disconnect(); } catch (e) {}
-        try { state._deepgramSourceNode?.disconnect(); } catch (e) {}
-        state.deepgramRecorder = null;
-        state.deepgramSocket = null;
-        state.deepgramStream = null;
-        state._deepgramWorkletNode = null;
-        state._deepgramSourceNode = null;
-        hideCaption();
-        speak('Live captions off.', true);
-    }
-
-    // Safari PCM path: use AudioWorklet to capture raw 16-bit PCM and
-    // stream it directly to Deepgram (which expects linear16 @ 16kHz).
-    async function startDeepgramPCM() {
-        try {
-            resumeAudio();
-            if (!state.audioCtx) return;
-
-            // Inline AudioWorklet processor as a blob URL (avoids needing a separate file)
-            const processorCode = `
-                class PCMProcessor extends AudioWorkletProcessor {
-                    constructor() { super(); this._buf = []; this._bufLen = 0; }
-                    process(inputs) {
-                        const ch = inputs[0]?.[0];
-                        if (!ch) return true;
-                        // Downsample from sampleRate to 16000 inline
-                        const ratio = sampleRate / 16000;
-                        for (let i = 0; i < ch.length; i += ratio) {
-                            this._buf.push(ch[Math.floor(i)]);
-                            this._bufLen++;
-                        }
-                        // Send in ~100ms chunks (1600 samples at 16kHz)
-                        if (this._bufLen >= 1600) {
-                            const out = new Float32Array(this._buf.splice(0, 1600));
-                            this._bufLen -= 1600;
-                            this.port.postMessage(out);
-                        }
-                        return true;
-                    }
-                }
-                registerProcessor('pcm-processor', PCMProcessor);
-            `;
-            const blob = new Blob([processorCode], { type: 'application/javascript' });
-            const blobUrl = URL.createObjectURL(blob);
-
-            await state.audioCtx.audioWorklet.addModule(blobUrl);
-            URL.revokeObjectURL(blobUrl);
-
-            state._deepgramSourceNode = state.audioCtx.createMediaStreamSource(state.deepgramStream);
-            state._deepgramWorkletNode = new AudioWorkletNode(state.audioCtx, 'pcm-processor');
-
-            state._deepgramWorkletNode.port.onmessage = (e) => {
-                if (state.deepgramSocket?.readyState !== WebSocket.OPEN) return;
-                // Convert Float32 → Int16
-                const float32 = e.data;
-                const int16 = new Int16Array(float32.length);
-                for (let i = 0; i < float32.length; i++) {
-                    int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
-                }
-                state.deepgramSocket.send(int16.buffer);
-            };
-
-            state._deepgramSourceNode.connect(state._deepgramWorkletNode);
-            // Don't connect to destination — we don't want to play back the mic
-            console.log('Deepgram PCM streaming started');
-        } catch (e) {
-            console.error('startDeepgramPCM error:', e);
-            speak('Could not start captions. Try reloading the page.', true);
         }
     }
 
@@ -2270,16 +2232,118 @@
         }
     }
 
+    // ========== MODE SELECT ==========
+    function showModeSelect() {
+        document.getElementById('modeSelect').classList.remove('hidden');
+        document.getElementById('assistScreen').classList.remove('visible');
+        document.getElementById('loading').classList.add('hidden');
+    }
+
+    function startGuideMode() {
+        state.appMode = 'guide';
+        document.getElementById('modeSelect').classList.add('hidden');
+        showPrivacyThenHelp();
+    }
+
+    function startAssistMode() {
+        state.appMode = 'assist';
+        document.getElementById('modeSelect').classList.add('hidden');
+        document.getElementById('assistScreen').classList.add('visible');
+        initAudio();
+        initSpeechRecognition();
+        speak('Sound and Captions mode. Captions are on. Tap the sound button to also detect environmental sounds.', true);
+        // Auto-start captions
+        setTimeout(() => {
+            if (!state.captionRecognition) initCaptionRecognition();
+            state.captionEnabled = true;
+            const btn = document.getElementById('btnAssistCC');
+            btn.classList.add('on');
+            btn.setAttribute('aria-pressed', 'true');
+            try { state.captionRecognition?.start(); } catch(e) {}
+            document.getElementById('assistStatusText').textContent = 'Captions on';
+            document.getElementById('assistStatusSub').textContent = 'Speak and text will appear below';
+        }, 600);
+    }
+
+    function leaveAssistMode() {
+        // Stop captions
+        state.captionEnabled = false;
+        try { state.captionRecognition?.stop(); } catch(e) {}
+        hideCaption();
+        // Stop sound detection
+        if (state.yamnetEnabled) toggleSoundDetection();
+        document.getElementById('assistScreen').classList.remove('visible');
+        showModeSelect();
+    }
+
+    function setupAssistButtons() {
+        document.getElementById('btnModeGuide').addEventListener('click', () => { unlockAudio(); startGuideMode(); });
+        document.getElementById('btnModeAssist').addEventListener('click', () => { unlockAudio(); startAssistMode(); });
+        document.getElementById('btnAssistBack').addEventListener('click', leaveAssistMode);
+
+        // CC button in assist screen
+        document.getElementById('btnAssistCC').addEventListener('click', () => {
+            unlockAudio();
+            if (!state.captionRecognition) initCaptionRecognition();
+            state.captionEnabled = !state.captionEnabled;
+            const btn = document.getElementById('btnAssistCC');
+            btn.classList.toggle('on', state.captionEnabled);
+            btn.setAttribute('aria-pressed', state.captionEnabled ? 'true' : 'false');
+            if (state.captionEnabled) {
+                state.captionFinalText = '';
+                try { state.captionRecognition?.start(); } catch(e) {}
+                speak('Captions on.', true);
+                document.getElementById('assistStatusText').textContent = 'Captions on';
+                document.getElementById('assistStatusSub').textContent = 'Speak and text will appear below';
+            } else {
+                try { state.captionRecognition?.stop(); } catch(e) {}
+                hideCaption();
+                speak('Captions off.', true);
+                document.getElementById('assistStatusText').textContent = 'Captions off';
+                document.getElementById('assistStatusSub').textContent = 'Tap CC to turn captions back on';
+            }
+        });
+
+        // Sound button in assist screen — reuse main toggleSoundDetection()
+        document.getElementById('btnAssistSnd').addEventListener('click', async () => {
+            unlockAudio();
+            await toggleSoundDetection();
+            // Mirror state to assist button
+            const btn = document.getElementById('btnAssistSnd');
+            btn.classList.toggle('on', state.yamnetEnabled);
+            btn.setAttribute('aria-pressed', state.yamnetEnabled ? 'true' : 'false');
+            if (state.yamnetEnabled) {
+                document.getElementById('assistStatusText').textContent = 'Sound detection on';
+                document.getElementById('assistStatusSub').textContent = 'Listening for alarms, voices, and more';
+            } else {
+                document.getElementById('assistStatusText').textContent = state.captionEnabled ? 'Captions on' : 'Idle';
+                document.getElementById('assistStatusSub').textContent = state.captionEnabled ? 'Speak and text will appear below' : 'Tap buttons above to start';
+            }
+        });
+    }
+
     // ========== INIT ==========
     async function init() {
         state.video = document.getElementById('video');
+
+        // Show mode select immediately — load assets in background
+        showModeSelect();
+        setupAssistButtons();
+        initColorblind();
+
+        // Load models in background so Guide mode is fast when chosen
+        Promise.all([
+            cocoSsd.load().then(m => { state.model = m; }).catch(e => console.error('COCO-SSD:', e)),
+        ]).then(() => {
+            console.log('Models ready');
+        });
+    }
+
+    async function showPrivacyThenHelp() {
+        // Start camera + depth for guide mode
         initAudio();
         initSpeechRecognition();
         setupGestures();
-        initColorblind();
-
-        document.getElementById('helpClose').addEventListener('click', hideHelp);
-        const privacyNotice = document.getElementById('privacyNotice');
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -2290,13 +2354,18 @@
             await state.video.play();
         } catch (e) { console.warn('Camera error:', e); }
 
-        try {
-            state.model = await cocoSsd.load();
-        } catch (e) { console.error('COCO-SSD load failed:', e); }
-
-        document.getElementById('loading').classList.add('hidden');
         initDepthModel();
 
+        document.getElementById('helpClose').addEventListener('click', hideHelp);
+        const backBtn = document.getElementById('helpBackToHome');
+        if (backBtn) backBtn.addEventListener('click', () => {
+            document.getElementById('help').classList.remove('visible');
+            state.isRunning = false;
+            if (state.video?.srcObject) { state.video.srcObject.getTracks().forEach(t => t.stop()); state.video.srcObject = null; }
+            showModeSelect();
+        });
+
+        const privacyNotice = document.getElementById('privacyNotice');
         privacyNotice.style.display = 'flex';
         let privacyRead = false;
         privacyNotice.addEventListener('click', () => {
@@ -2307,8 +2376,7 @@
                     speechSynthesis.cancel();
                     const u = new SpeechSynthesisUtterance(
                         'Welcome to GuideDog. ' +
-                        'This app uses your camera and cloud A.I. to help you navigate. ' +
-                        'It can also caption speech and detect environmental sounds using your microphone. ' +
+                        'This app uses your camera and cloud A.I. to help you navigate safely. ' +
                         'No data is stored. Tap again to continue.'
                     );
                     u.rate = 1.0; u.volume = 1.0;
@@ -2328,24 +2396,26 @@
         if (document.hidden) {
             state.isRunning = false;
             if (state.xrSession) { state.xrSession.end().catch(() => {}); state.xrSession = null; state.xrDepthActive = false; }
-            // Pause sound detection when hidden
             if (state.yamnetInterval) { clearInterval(state.yamnetInterval); state.yamnetInterval = null; }
-            // Pause Deepgram when hidden (saves API usage)
-            if (state.deepgramRecorder?.state === 'recording') {
-                try { state.deepgramRecorder.stop(); } catch (e) {}
+        } else {
+            if (state.appMode === 'guide' && state.model && state.video?.srcObject) {
+                state.isRunning = true;
+                protectionLoop();
+                if (state.yamnetEnabled && !state.yamnetInterval) {
+                    state.yamnetInterval = setInterval(() => {
+                        if (state.isRunning && state.yamnetEnabled) startYAMNetRecorder();
+                    }, CONFIG.YAMNET_INTERVAL);
+                }
+            } else if (state.appMode === 'assist') {
+                if (state.yamnetEnabled && !state.yamnetInterval) {
+                    state.yamnetInterval = setInterval(() => {
+                        if (state.yamnetEnabled) startYAMNetRecorder();
+                    }, CONFIG.YAMNET_INTERVAL);
+                }
             }
-        } else if (state.model && state.video?.srcObject) {
-            state.isRunning = true;
-            protectionLoop();
-            // Restart sound detection if it was enabled
-            if (state.yamnetEnabled && !state.yamnetInterval) {
-                state.yamnetInterval = setInterval(() => {
-                    if (state.isRunning && state.yamnetEnabled) startYAMNetRecorder();
-                }, CONFIG.YAMNET_INTERVAL);
-            }
-            // Restart Deepgram if captions were on
-            if (state.captionEnabled && !hasWebSpeech && !state.deepgramSocket) {
-                startDeepgramCaptions();
+            // Restart captions if they were on (both modes)
+            if (state.captionEnabled && state.captionRecognition) {
+                try { state.captionRecognition.start(); } catch (_) {}
             }
         }
     });
