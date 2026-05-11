@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v26';     // bumped — perf instrumentation HUD
+const CACHE = 'guidedog-v27';     // bumped — deeper depth instrumentation (stages + warm bucket)
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [

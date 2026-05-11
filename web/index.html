@@ -1340,6 +1340,37 @@
             );
             if (badge) badge.textContent = 'AI + Depth Active';
             console.log('Transformers.js depth model ready');
+
+            // Deep-instrumentation log: dump everything we can find out about
+            // which ONNX backend ended up running the model. Helps diagnose
+            // whether WASM SIMD / WebGPU / plain WASM is in use.
+            try {
+                const info = {
+                    backends: env && env.backends ? Object.keys(env.backends) : null,
+                    onnxWasm: env && env.backends && env.backends.onnx && env.backends.onnx.wasm
+                        ? {
+                            numThreads: env.backends.onnx.wasm.numThreads,
+                            simd: env.backends.onnx.wasm.simd,
+                            proxy: env.backends.onnx.wasm.proxy
+                        }
+                        : null,
+                    useFSCache: env ? env.useFSCache : null,
+                    useBrowserCache: env ? env.useBrowserCache : null,
+                };
+                // Try to extract the chosen execution providers from the underlying session.
+                const model = state.depthPipeline && state.depthPipeline.model;
+                const session = model && (model.session || (model.sessions && Object.values(model.sessions)[0]));
+                if (session) {
+                    info.sessionProviders = session.handler?.executionProviders
+                        ?? session.providers
+                        ?? null;
+                    info.inputNames = session.inputNames || null;
+                    info.outputNames = session.outputNames || null;
+                }
+                console.log('[Perf] Depth backend info:', JSON.stringify(info, null, 2));
+            } catch (e) {
+                console.warn('[Perf] Could not introspect depth backend:', e.message || e);
+            }
         } catch (e) {
             console.error('Depth model failed:', e.message || e);
             if (badge) badge.textContent = 'AI Active';
@@ -1370,19 +1401,37 @@
         return null;
     }
 
+    // Counter used by deep depth instrumentation. The first ~5 inferences
+    // include model warmup overhead; we track them separately so the
+    // steady-state median isn't pulled up by cold starts.
+    let _depthCallCount = 0;
+
     async function runDepthDetection() {
         // LiDAR runs via XR animation frame — nothing to do here
         if (state.xrDepthActive) return null;
         if (!state.depthPipeline || !state.video || state.video.videoWidth === 0) return null;
 
         try {
+            // Stage 1: draw video frame onto a 256x256 canvas
+            Perf.start('depth_stage_draw');
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
             canvas.getContext('2d').drawImage(state.video, 0, 0, 256, 256);
+            Perf.end('depth_stage_draw');
 
+            // Stage 2: encode the canvas to a JPEG data URL (CPU work)
+            Perf.start('depth_stage_encode');
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            Perf.end('depth_stage_encode');
+
+            // Stage 3: actual model inference inside Transformers.js
             Perf.start('depth_anything');
-            const { depth } = await state.depthPipeline(canvas.toDataURL('image/jpeg', 0.6));
+            _depthCallCount++;
+            const warmBucket = _depthCallCount > 5;
+            if (warmBucket) Perf.start('depth_anything_warm');
+            const { depth } = await state.depthPipeline(dataUrl);
             Perf.end('depth_anything');
+            if (warmBucket) Perf.end('depth_anything_warm');
             const data = depth.data, w = depth.width, h = depth.height, ch = depth.channels || 1;
 
             let cSum = 0, cN = 0, lSum = 0, lN = 0, rSum = 0, rN = 0;
