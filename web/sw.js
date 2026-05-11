@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v25';     // bumped — full app-style UI: CAM toggle, gesture hint, no bottom buttons
+const CACHE = 'guidedog-v26';     // bumped — perf instrumentation HUD
 const CDN_CACHE = 'guidedog-cdn-v2';
 
 const CDN_SCRIPTS = [

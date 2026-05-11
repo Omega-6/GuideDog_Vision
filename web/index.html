@@ -289,7 +289,29 @@
         .help-close { margin-top: 20px; padding: 20px; background: #48f; border: none; border-radius: 15px; color: #fff; font-size: 18px; font-weight: 700; }
         .help-item.toggle { cursor: pointer; }
         .help-item.toggle:active { background: #1a1a1a; }
-        .version-tag { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); right: 8px; font-size: 10px; color: rgba(255,255,255,0.3); z-index: 5; pointer-events: none; }
+        .version-tag { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); right: 8px; font-size: 10px; color: rgba(255,255,255,0.3); z-index: 5; }
+
+        /* Perf debug overlay. Hidden by default; toggle with ?debug=1 or by
+           triple-tapping the version tag. Pointer-events: none so it never
+           steals taps from underlying gestures. */
+        #perfHUD {
+            position: fixed;
+            top: max(6px, env(safe-area-inset-top));
+            left: 6px;
+            background: rgba(0, 0, 0, 0.72);
+            color: #0f8;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 10px;
+            line-height: 1.35;
+            padding: 6px 8px;
+            border-radius: 4px;
+            white-space: pre;
+            z-index: 1000;
+            pointer-events: none;
+            max-width: 70%;
+            display: none;
+        }
+        #perfHUD.show { display: block; }
 
         /* Colorblind-friendly palette (Okabe-Ito CUD) for protanopia / deuteranopia.
            Replaces red/green with vermillion / bluish-green which stay distinguishable
@@ -363,6 +385,7 @@
     </div>
     
     <div class="version-tag" id="versionTag">build 25c-v2</div>
+    <div id="perfHUD" aria-hidden="true"></div>
 
     <div class="app">
         <video id="video" autoplay playsinline muted></video>
@@ -469,7 +492,87 @@
                     "refrigerator", "backpack",
                     "fire hydrant", "stop sign", "parking meter", "laptop", "tv"]
     };
-    
+
+    // ========== PERF INSTRUMENTATION ==========
+    // Lightweight rolling-window timing tracker. Enabled via ?debug=1 URL
+    // parameter or by triple-tapping the version tag. Zero overhead when
+    // disabled (all calls short-circuit at the enabled check).
+    const Perf = (function () {
+        const params = new URLSearchParams(location.search);
+        let enabled = params.get('debug') === '1';
+        const MAX = 60;                       // rolling window size per metric
+        const samples = Object.create(null);  // duration metrics
+        const intervals = Object.create(null); // gap-between-events metrics
+        const starts = Object.create(null);
+        const lastEvents = Object.create(null);
+
+        function push(bucket, name, ms) {
+            if (!bucket[name]) bucket[name] = [];
+            const arr = bucket[name];
+            arr.push(ms);
+            if (arr.length > MAX) arr.shift();
+        }
+
+        function statsFor(arr) {
+            if (!arr || arr.length === 0) return null;
+            const sorted = arr.slice().sort((a, b) => a - b);
+            const n = sorted.length;
+            return {
+                n,
+                median: sorted[Math.floor(n / 2)],
+                p95: sorted[Math.floor(n * 0.95)],
+                max: sorted[n - 1]
+            };
+        }
+
+        return {
+            get enabled() { return enabled; },
+            setEnabled(v) {
+                enabled = !!v;
+                const hud = document.getElementById('perfHUD');
+                if (hud) hud.classList.toggle('show', enabled);
+            },
+            start(name) {
+                if (!enabled) return;
+                starts[name] = performance.now();
+            },
+            end(name) {
+                if (!enabled) return 0;
+                const t = starts[name];
+                if (t === undefined) return 0;
+                const ms = performance.now() - t;
+                push(samples, name, ms);
+                delete starts[name];
+                return ms;
+            },
+            event(name) {
+                if (!enabled) return;
+                const now = performance.now();
+                const prev = lastEvents[name];
+                if (prev !== undefined) push(intervals, name + '_gap', now - prev);
+                lastEvents[name] = now;
+            },
+            record(name, ms) {
+                if (!enabled) return;
+                push(samples, name, ms);
+            },
+            render() {
+                if (!enabled) return '';
+                const rows = [];
+                const names = new Set([...Object.keys(samples), ...Object.keys(intervals)]);
+                for (const name of names) {
+                    const s = statsFor(samples[name] || intervals[name]);
+                    if (!s) continue;
+                    const med = s.median.toFixed(0).padStart(4);
+                    const p95 = s.p95.toFixed(0).padStart(4);
+                    rows.push(`${name.padEnd(20)} med ${med}ms  p95 ${p95}ms  n=${s.n}`);
+                }
+                rows.sort();
+                return rows.join('\n');
+            }
+        };
+    })();
+
     // ========== STATE ==========
     const state = {
         video: null,
@@ -644,6 +747,9 @@
             const u = new SpeechSynthesisUtterance(text);
             u.rate = rate;
             u.volume = 1.0;
+            // Perf: time from speak() call to actual onstart fire — the queue wait
+            const dispatchT0 = performance.now();
+            u.onstart = () => Perf.record('tts_dispatch', performance.now() - dispatchT0);
             u.onend = () => { _currentSpeechPriority = 0; };
             u.onerror = () => { _currentSpeechPriority = 0; };
             speechSynthesis.speak(u);
@@ -883,12 +989,15 @@
         // Back off if worker keeps failing (prevents hammering a broken endpoint)
         if (Date.now() < _aiBackoffUntil) return null;
 
+        const t0 = performance.now();
         try {
             const response = await fetch(CONFIG.WORKER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: imageData, provider, mode, context })
             });
+            // Perf: time to response headers (TTFB-ish for the Worker)
+            Perf.record('cloud_ai_ttfb', performance.now() - t0);
             if (!response.ok) {
                 _aiFailCount++;
                 // Exponential backoff: 10s, 20s, 40s, 60s max
@@ -898,6 +1007,8 @@
             }
             _aiFailCount = 0;  // reset on success
             const data = await response.json();
+            // Perf: total roundtrip including JSON body
+            Perf.record('cloud_ai_total', performance.now() - t0);
             return data.result || null;
         } catch (e) {
             _aiFailCount++;
@@ -976,7 +1087,9 @@
         if (!state.model || !state.video) return [];
 
         try {
+            Perf.start('coco_ssd');
             const predictions = await state.model.detect(state.video);
+            Perf.end('coco_ssd');
 
             const vw = state.video.videoWidth || 1;
             const vh = state.video.videoHeight || 1;
@@ -1267,7 +1380,9 @@
             canvas.width = 256; canvas.height = 256;
             canvas.getContext('2d').drawImage(state.video, 0, 0, 256, 256);
 
+            Perf.start('depth_anything');
             const { depth } = await state.depthPipeline(canvas.toDataURL('image/jpeg', 0.6));
+            Perf.end('depth_anything');
             const data = depth.data, w = depth.width, h = depth.height, ch = depth.channels || 1;
 
             let cSum = 0, cN = 0, lSum = 0, lN = 0, rSum = 0, rN = 0;
@@ -1470,6 +1585,8 @@
             return;
         }
 
+        Perf.event('fast_loop');   // tracks actual interval between fires
+
         const now = Date.now();
         let threat = 'safe';
         let label = '';
@@ -1570,6 +1687,9 @@
             setTimeout(protectionLoop, 500);
             return;
         }
+
+        Perf.event('protection_loop');  // tracks actual interval between fires
+        Perf.start('protection_full');  // full iteration time
 
         const now = Date.now();
 
@@ -1698,6 +1818,7 @@
         state._mainThreat = highestThreat;
         state.currentObstacle = mostDangerous;
 
+        Perf.end('protection_full');
         _loopRunning = false;
         setTimeout(protectionLoop, CONFIG.LOCAL_SCAN_INTERVAL);
     }
@@ -2048,6 +2169,38 @@
         }
     }
 
+    // ========== PERF HUD ==========
+    // Wires up the debug overlay. Visible when ?debug=1 or after triple-tapping
+    // the version tag. Renders every 500ms when enabled; idle otherwise.
+    function initPerfHUD() {
+        const hud = document.getElementById('perfHUD');
+        if (!hud) return;
+
+        // Apply initial state (URL param sets Perf.enabled at module init)
+        if (Perf.enabled) hud.classList.add('show');
+
+        // Triple-tap on the version tag toggles the HUD at runtime
+        const tag = document.getElementById('versionTag');
+        if (tag) {
+            let taps = [];
+            tag.addEventListener('click', () => {
+                const now = Date.now();
+                taps = taps.filter(t => now - t < 800);
+                taps.push(now);
+                if (taps.length >= 3) {
+                    taps = [];
+                    Perf.setEnabled(!Perf.enabled);
+                }
+            });
+        }
+
+        // Render loop. Cheap when disabled (Perf.render returns '').
+        setInterval(() => {
+            if (!Perf.enabled) return;
+            hud.textContent = Perf.render();
+        }, 500);
+    }
+
     // ========== INIT ==========
     async function init() {
         state.video = document.getElementById('video');
@@ -2055,6 +2208,7 @@
         initSpeechRecognition();
         setupGestures();
         initColorblind();
+        initPerfHUD();
 
         document.getElementById('helpClose').addEventListener('click', hideHelp);
         const privacyNotice = document.getElementById('privacyNotice');
