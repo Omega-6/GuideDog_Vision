@@ -1833,29 +1833,6 @@
       //  can't load, so the button always does something useful.
       // ══════════════════════════════════════════════════════════════════
 
-      let _yamnetClasses = null; // string[521] once loaded
-
-      // Fetch YAMNet class names in the background. Non-blocking — inference
-      // works without it (uses generic "class_N" labels until it arrives).
-      async function fetchYAMNetClasses() {
-        try {
-          const r = await fetch(
-            "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv",
-            { cache: "force-cache" },
-          );
-          if (!r.ok) return;
-          const csv = await r.text();
-          _yamnetClasses = csv
-            .split("\n")
-            .slice(1)
-            .filter(Boolean)
-            .map((line) => (line.split(",")[2] || "").replace(/"/g, "").trim());
-          console.log("YAMNet classes loaded:", _yamnetClasses.length);
-        } catch (e) {
-          console.warn("YAMNet class CSV fetch failed:", e.message);
-        }
-      }
-
       async function loadYAMNet() {
         if (state.yamnetModel) return true;
         // Use Web Audio frequency analysis — no model download needed, works on all devices.
@@ -1865,145 +1842,6 @@
         const badge = document.getElementById("aiBadge");
         if (badge) badge.textContent = "AI + Sound Active";
         return true;
-      }
-
-      // ── MediaRecorder-based audio capture ─────────────────────────────────────
-      // Records 1-second chunks, converts to PCM via decodeAudioData, then
-      // runs inference. Avoids the deprecated & broken ScriptProcessor API.
-      let _yamnetRecorder = null;
-      let _yamnetChunks = [];
-
-      function startYAMNetRecorder() {
-        if (!state.yamnetMicStream) return;
-        try {
-          const mimeType =
-            ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", ""].find(
-              (t) => !t || MediaRecorder.isTypeSupported(t),
-            ) || "";
-          _yamnetRecorder = new MediaRecorder(
-            state.yamnetMicStream,
-            mimeType ? { mimeType } : {},
-          );
-          _yamnetChunks = [];
-
-          _yamnetRecorder.ondataavailable = (e) => {
-            if (e.data?.size > 0) _yamnetChunks.push(e.data);
-          };
-
-          _yamnetRecorder.onstop = async () => {
-            const chunks = _yamnetChunks.splice(0);
-            if (!chunks.length || !state.yamnetEnabled) return;
-
-            const blob = new Blob(chunks, {
-              type: _yamnetRecorder.mimeType || "audio/webm",
-            });
-            await classifyAudioBlob(blob);
-
-            // Restart for the next chunk if still enabled
-            if (state.yamnetEnabled && state.yamnetMicStream) {
-              _yamnetChunks = [];
-              try {
-                _yamnetRecorder.start();
-                setTimeout(() => {
-                  if (_yamnetRecorder?.state === "recording")
-                    _yamnetRecorder.stop();
-                }, CONFIG.YAMNET_INTERVAL);
-              } catch (_) {}
-            }
-          };
-
-          _yamnetRecorder.start();
-          setTimeout(() => {
-            if (_yamnetRecorder?.state === "recording") _yamnetRecorder.stop();
-          }, CONFIG.YAMNET_INTERVAL);
-        } catch (e) {
-          console.error("MediaRecorder setup error:", e);
-        }
-      }
-
-      async function classifyAudioBlob(blob) {
-        if (!state.audioCtx) return;
-        try {
-          resumeAudio();
-          const arrayBuffer = await blob.arrayBuffer();
-          const audioBuffer = await state.audioCtx.decodeAudioData(arrayBuffer);
-          // Mix to mono
-          const channelData = audioBuffer.getChannelData(0);
-          // Resample to 16 kHz (YAMNet requirement)
-          const resampled = resampleLinear(
-            channelData,
-            audioBuffer.sampleRate,
-            16000,
-          );
-          if (resampled.length < 15600) return; // need ≥ 0.975 s
-
-          if (state.yamnetModel === "energy-fallback") {
-            runEnergyFallback(resampled);
-            return;
-          }
-
-          const waveform = tf.tensor1d(resampled);
-          try {
-            const output = await state.yamnetModel.executeAsync(waveform);
-            // YAMNet returns [scores[frames,521], embeddings, spectrogram]
-            const scoresT = Array.isArray(output) ? output[0] : output;
-            const meanT = tf.mean(scoresT, 0);
-            const scoresArr = await meanT.data();
-            meanT.dispose();
-            if (Array.isArray(output)) output.forEach((t) => t?.dispose?.());
-            else output?.dispose?.();
-            handleYAMNetScores(scoresArr);
-          } catch (inferErr) {
-            console.warn("YAMNet inference error:", inferErr.message);
-          }
-          waveform.dispose();
-        } catch (e) {
-          console.warn("classifyAudioBlob error:", e.message);
-        }
-      }
-
-      // Linear interpolation resampler — fast enough for 1 s chunks
-      function resampleLinear(input, srcRate, dstRate) {
-        if (srcRate === dstRate) return input;
-        const ratio = srcRate / dstRate;
-        const outLen = Math.round(input.length / ratio);
-        const out = new Float32Array(outLen);
-        for (let i = 0; i < outLen; i++) {
-          const pos = i * ratio;
-          const idx = Math.floor(pos);
-          const frac = pos - idx;
-          out[i] =
-            idx + 1 < input.length
-              ? input[idx] * (1 - frac) + input[idx + 1] * frac
-              : input[Math.min(idx, input.length - 1)];
-        }
-        return out;
-      }
-
-      // Energy-based fallback: detect loud transients without ML.
-      // Uses RMS amplitude + zero-crossing rate heuristics.
-      // ── Web Audio frequency analyser ─────────────────────────────────────────
-      // Runs in real-time using an AnalyserNode — no MediaRecorder chunks needed.
-      // Called on an interval while sound detection is enabled.
-      let _analyser = null;
-      let _analyserBuf = null;
-
-      function initAnalyser() {
-        if (_analyser || !state.audioCtx || !state.yamnetMicStream) return;
-        try {
-          resumeAudio();
-          const src = state.audioCtx.createMediaStreamSource(
-            state.yamnetMicStream,
-          );
-          _analyser = state.audioCtx.createAnalyser();
-          _analyser.fftSize = 2048;
-          _analyser.smoothingTimeConstant = 0.5;
-          src.connect(_analyser);
-          _analyserBuf = new Float32Array(_analyser.frequencyBinCount);
-          console.log("Web Audio analyser ready, fftSize:", _analyser.fftSize);
-        } catch (e) {
-          console.warn("Analyser init error:", e);
-        }
       }
 
       function runEnergyFallback(samples) {
@@ -2108,29 +1946,6 @@
         if (totalAvg > 0.05) {
           handleSoundLabel("🔊 Loud sound nearby", "warning");
         }
-      }
-
-      function handleYAMNetScores(scoresArr) {
-        let bestLabel = null;
-        let bestScore = CONFIG.YAMNET_SCORE_THRESHOLD;
-        let bestUrgency = "info";
-
-        for (let i = 0; i < scoresArr.length; i++) {
-          if (scoresArr[i] < bestScore) continue;
-          const className = _yamnetClasses?.[i] || "";
-          for (const [fragment, info] of Object.entries(
-            CONFIG.SOUND_CATEGORIES,
-          )) {
-            if (className.toLowerCase().includes(fragment.toLowerCase())) {
-              bestLabel = info.label;
-              bestUrgency = info.urgency;
-              bestScore = scoresArr[i];
-              break;
-            }
-          }
-        }
-
-        if (bestLabel) handleSoundLabel(bestLabel, bestUrgency);
       }
 
       function handleSoundLabel(label, urgency) {
@@ -3821,15 +3636,17 @@
             state.isRunning = true;
             protectionLoop();
             if (state.yamnetEnabled && !state.yamnetInterval) {
+              initAnalyser();
               state.yamnetInterval = setInterval(() => {
                 if (state.isRunning && state.yamnetEnabled)
-                  startYAMNetRecorder();
+                  runFrequencyAnalysis();
               }, CONFIG.YAMNET_INTERVAL);
             }
           } else if (state.appMode === "assist") {
             if (state.yamnetEnabled && !state.yamnetInterval) {
+              initAnalyser();
               state.yamnetInterval = setInterval(() => {
-                if (state.yamnetEnabled) startYAMNetRecorder();
+                if (state.yamnetEnabled) runFrequencyAnalysis();
               }, CONFIG.YAMNET_INTERVAL);
             }
           }
