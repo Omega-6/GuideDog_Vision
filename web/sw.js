@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v37';       // bumped — buttons get distinct shape per function (ghost nav, icon, chip)
+const CACHE = 'guidedog-v38';       // bumped — drop 'Vision' wordmark, flat home cards, labelled sound chip
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [
