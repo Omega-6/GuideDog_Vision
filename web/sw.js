@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v33';       // bumped — clean guide-mode UI, silent assist mode, no emojis, no debug HUD
+const CACHE = 'guidedog-v34';       // bumped — design system + polished mode select / loading / help / status bar
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [
