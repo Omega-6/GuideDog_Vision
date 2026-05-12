@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v34';       // bumped — design system + polished mode select / loading / help / status bar
+const CACHE = 'guidedog-v35';       // bumped — scrollable home, borderless buttons, smaller caption box
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [
