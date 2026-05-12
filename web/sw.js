@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v38';       // bumped — drop 'Vision' wordmark, flat home cards, labelled sound chip
+const CACHE = 'guidedog-v39';       // bumped — feature tag pills get squared corners and no fill
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [
