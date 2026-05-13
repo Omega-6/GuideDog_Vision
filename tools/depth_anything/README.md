@@ -43,8 +43,8 @@ The `.mlpackage` lands in this directory. Copy it into the Xcode project
 `convert.py` is the textbook path: load the HuggingFace PyTorch model
 directly, trace it, convert. It currently fails with a `_cast` error
 because the Dinov2 backbone in transformers 5.x uses data dependent
-control flow that doesn't trace cleanly. I kept it here as a record of
-what I tried first.
+control flow that doesn't trace cleanly. It stays here as a record of
+the first approach.
 
 `convert_via_onnx.py` is the path that works. Loads the ONNX export
 (which has the control flow already flattened into a static graph),

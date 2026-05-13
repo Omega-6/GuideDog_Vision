@@ -4,7 +4,7 @@
 
 About **2.2 billion people** worldwide live with vision impairment. **43.3 million** are fully blind. **295.1 million** have moderate to severe vision loss. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people have one. The reasons are stacked: a single dog costs **$40,000 to $60,000** to train, training takes **two years**, only **one in three** dogs that enter a program actually graduate, and waiting lists run **one to three years**.
 
-I built this app because every phone in someone's pocket has cameras and accelerometers and a Neural Engine. None of that hardware is being used to help blind people navigate. It should be.
+The app exists because every phone in someone's pocket already has cameras, a Neural Engine, and accelerometers. None of that hardware was being used to help blind people navigate. This project tries to change that.
 
 This app is not a guide dog and never will be. A dog makes its own safety calls, and a dog is a companion. What software can do is watch the scene, identify obstacles, and announce them. Read the [README](../../README.md) for the full problem writeup with citations.
 
@@ -24,7 +24,7 @@ Any iPhone running iOS 15 or later with ARKit world tracking support. The experi
 
 **LiDAR equipped iPhones (recommended).** iPhone 12 Pro and later Pro models have a LiDAR scanner. These give you the full experience: centimeter accurate depth at 30 fps, ARKit mesh classification for walls and doors, and the most reliable distance information.
 
-**Non Pro iPhones.** The app still runs. Object detection, segmentation, and cloud AI all work normally. For depth, the app falls back to Depth-Anything, a neural depth estimator I converted to CoreML. It's less precise than LiDAR but gives useful distance warnings. On these phones, speech drops the "feet" suffix from announcements ("Person right" instead of "Person, 6 feet") because the distances are estimates rather than direct measurements.
+**Non Pro iPhones.** The app still runs. Object detection, segmentation, and cloud AI all work normally. For depth, the app falls back to Depth-Anything, a neural depth estimator converted to CoreML for this project. It's less precise than LiDAR but gives useful distance warnings. On these phones, speech drops the "feet" suffix from announcements ("Person right" instead of "Person, 6 feet") because the distances are estimates rather than direct measurements.
 
 ## What you get
 
@@ -38,11 +38,11 @@ ARKit mesh classification reconstructs a 3D mesh of the room and labels surfaces
 
 DeepLabV3 catches large objects YOLO missed by segmenting the whole frame into 21 PASCAL VOC classes.
 
-BlindGuideNav is my custom 55 class model trained on navigation specific features (curbs, crosswalks, stairs, doors, railings, wet floors, etc.). It runs alongside YOLO and their detections merge before the announcement system picks what to speak.
+BlindGuideNav is the custom 55 class model trained for this project on navigation specific features (curbs, crosswalks, stairs, doors, railings, wet floors, etc.). It runs alongside YOLO and their detections merge before the announcement system picks what to speak.
 
 ### Wall inference for featureless surfaces
 
-The hardest failure mode I ran into was a blank white wall with no edges. ARKit's mesh classifier needs visual features to anchor, so it sometimes loses tracking with `.limited(.insufficientFeatures)` when the camera is pointed at a flat painted wall. The fix: when the left, center, and right depth zones all read similar distances and no object detection has fired in the center recently, the app says "Wall ahead" instead of the generic "Heads up" or "Something ahead." This backstops the mesh classifier exactly when it would otherwise fail. Depth processing now keeps running during `.limited(.insufficientFeatures)` so the inference can fire.
+The hardest failure mode encountered was a blank white wall with no edges. ARKit's mesh classifier needs visual features to anchor, so it sometimes loses tracking with `.limited(.insufficientFeatures)` when the camera is pointed at a flat painted wall. The fix: when the left, center, and right depth zones all read similar distances and no object detection has fired in the center recently, the app says "Wall ahead" instead of the generic "Heads up" or "Something ahead." This backstops the mesh classifier exactly when it would otherwise fail. Depth processing now keeps running during `.limited(.insufficientFeatures)` so the inference can fire.
 
 The wall announcer also has three distance tiers: "Wall ahead" under 3 meters, "Wall, X feet" under 2 meters, "Wall nearby" under 1 meter.
 
@@ -64,7 +64,7 @@ The progressive band system fires once when you enter each band. Enter danger at
 
 ### Depth-Anything fallback
 
-On iPhones without LiDAR, the app loads a Depth-Anything CoreML model I converted from the HuggingFace export. It runs in about 9 ms on iPhone 13 and produces a relative depth map. The model is preloaded on app launch so the engine starts instantly when the user taps START. The same progressive band system uses these estimates, just labeled as approximate so speech drops the foot count.
+On iPhones without LiDAR, the app loads a Depth-Anything CoreML model converted from the HuggingFace export. It runs in about 9 ms on iPhone 13 and produces a relative depth map. The model is preloaded on app launch so the engine starts instantly when the user taps START. The same progressive band system uses these estimates, just labeled as approximate so speech drops the foot count.
 
 ### Startup speech
 

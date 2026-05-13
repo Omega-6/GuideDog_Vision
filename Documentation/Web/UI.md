@@ -10,6 +10,7 @@ Designed for blind users. Visual elements exist primarily for sighted helpers an
 
 The homepage is the first screen users see. It uses system humanist sans (`-apple-system`, `SF Pro Text`, `system-ui`) instead of the older monospace, so it reads conversationally instead of code adjacent.
 
+
 Hero copy: **"Eyes and ears, when you need them."** with a blue accent on "when you need them."
 
 Two big mode cards:

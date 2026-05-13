@@ -1,19 +1,19 @@
 # GuideDog Vision
 
-I built GuideDog Vision so a phone could do some of the things a guide dog does for a blind person. The iPhone app watches what's in front of you with LiDAR and computer vision and tells you what it sees. The website does the same thing without LiDAR, in any browser, on any phone.
+GuideDog Vision was built so a phone could do some of the things a guide dog does for a blind person. The iPhone app watches what's in front of you with LiDAR and computer vision and tells you what it sees. The website does the same thing without LiDAR, in any browser, on any phone.
 
 | App Store | Website |
 |:---:|:---:|
 | <img src="qr-app.png" alt="QR code for GuideDog Vision on the App Store" width="240"> | <img src="qr-website.png" alt="QR code for GuideDog Vision website" width="240"> |
 | Scan to download on iPhone | Scan to launch in your browser |
 
-## Why I Built This
+## Why This Was Built
 
 ### How many people this affects
 
-The World Health Organization counts about **2.2 billion people** worldwide living with some kind of vision impairment. **43.3 million** of them are fully blind. Another **295.1 million** have moderate to severe vision loss [1]. The number is climbing. Vision loss is projected to grow by **55 percent by 2050**, adding roughly **600 million more people** on top of where we are today [2].
+The World Health Organization counts about **2.2 billion people** worldwide living with some kind of vision impairment. **43.3 million** of them are fully blind. Another **295.1 million** have moderate to severe vision loss [1]. The number is climbing. Vision loss is projected to grow by **55 percent by 2050**, adding roughly **600 million more people** on top of today's totals [2].
 
-The numbers I find hardest to read are the downstream ones. In the United States, the employment rate for blind and visually impaired adults sits around **44 percent**, compared to **77 percent** for everyone else [3]. People with vision loss are **1.6 to 2.8 times more likely** to develop depression [4]. Mobility, work, social life, mental health: it all compounds.
+The hardest numbers to read are the downstream ones. In the United States, the employment rate for blind and visually impaired adults sits around **44 percent**, compared to **77 percent** for everyone else [3]. People with vision loss are **1.6 to 2.8 times more likely** to develop depression [4]. Mobility, work, social life, mental health: it all compounds.
 
 ### The guide dog gap
 
@@ -47,7 +47,7 @@ GuideDog Vision is not a guide dog. A trained animal makes its own safety calls 
 
 The project has two halves that share the same goal.
 
-The iPhone app uses ARKit LiDAR (on Pro models), YOLOv8n object detection, a custom 55 class navigation model I trained, Apple's mesh classifier for walls and doors, and a cloud AI fallback for scene descriptions. On non Pro iPhones it falls back to Depth-Anything, a neural depth estimator I converted to CoreML, so the app still works without LiDAR.
+The iPhone app uses ARKit LiDAR (on Pro models), YOLOv8n object detection, a custom 55 class navigation model trained for this project, Apple's mesh classifier for walls and doors, and a cloud AI fallback for scene descriptions. On non Pro iPhones it falls back to Depth-Anything, a neural depth estimator converted to CoreML, so the app still works without LiDAR.
 
 The website is a Progressive Web App that runs in any modern browser. It has no LiDAR access at all, so it leans harder on machine learning: COCO-SSD for objects, Depth-Anything in the browser for relative depth, MediaPipe Audio Classifier for sound detection, the Web Speech API for live captions, and a cloud AI that runs every few seconds as a sighted companion.
 

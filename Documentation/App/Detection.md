@@ -2,7 +2,7 @@
 
 ## Overview
 
-The app runs six detection layers at once, each at a different frame rate and each targeting a different aspect of the environment. LiDAR provides raw distance. YOLOv8n recognizes 80 COCO classes. BlindGuideNav (my custom model) recognizes 55 navigation specific classes that COCO trained models miss (curbs, crosswalks, stairs, doors, railings, wet floors). ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects everything else missed. The wall inference layer fires when zone depths are uniform and no center object detection has hit recently.
+The app runs six detection layers at once, each at a different frame rate and each targeting a different aspect of the environment. LiDAR provides raw distance. YOLOv8n recognizes 80 COCO classes. BlindGuideNav (the custom model built for this project) recognizes 55 navigation specific classes that COCO trained models miss (curbs, crosswalks, stairs, doors, railings, wet floors). ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects everything else missed. The wall inference layer fires when zone depths are uniform and no center object detection has hit recently.
 
 The point of stacking these is that they fail in different ways. Any single method has blind spots. LiDAR sees distance but doesn't know what an object is. Object detectors know what something is but cannot measure how far it is without help. Mesh classification handles architectural features but misses movable objects. Layering them means very few scenarios where every layer misses the same hazard.
 

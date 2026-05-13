@@ -1,16 +1,16 @@
 # Web Design Decisions
 
-This is where I keep track of why the website is built the way it is. Most of these came out of specific bugs or user complaints during testing. Each section is the decision, what it replaces, and what made me pick it.
+Notes here track why the website is built the way it is. Most of these came out of specific bugs or user complaints during testing. Each section names the decision, what it replaces, and the reason it won out.
 
 ---
 
 ## Why COCO-SSD instead of MediaPipe for object detection
 
-I started with MediaPipe's object detection because it had a cleaner API. On iOS Safari, the ES module import crashed the browser tab during WebAssembly init. Not during inference. Just loading the library was enough to kill the page.
+An earlier prototype used MediaPipe's object detection because it had a cleaner API. On iOS Safari, the ES module import crashed the browser tab during WebAssembly init. Not during inference. Just loading the library was enough to kill the page.
 
-COCO-SSD loads through a traditional `<script>` tag and exposes a `cocoSsd` global. No ES modules, no WebAssembly imports happening at module scope. It works on every browser I've tested, including iOS Safari.
+COCO-SSD loads through a traditional `<script>` tag and exposes a `cocoSsd` global. No ES modules, no WebAssembly imports happening at module scope. It works on every browser tested, including iOS Safari.
 
-The cost is that COCO-SSD only detects 80 COCO classes. For my use case the 19 navigation relevant classes cover the most common obstacles, so it's fine.
+The cost is that COCO-SSD only detects 80 COCO classes. For this use case the 19 navigation relevant classes cover the most common obstacles, so it's fine.
 
 ---
 
@@ -22,7 +22,7 @@ This was consistent on iPhones with 4 GB of RAM and intermittent on iPhones with
 
 Transformers.js v2 (`@xenova/transformers@2.17.2`) uses a lighter inference engine. Both it and TensorFlow.js can coexist inside iOS Safari's budget. The v2 engine is slower than v3, but the depth model only runs every 400 ms so the speed difference doesn't matter.
 
-The tradeoff: v2 isn't actively maintained. Future models may only ship on v3. If iOS Safari raises the memory limit, I'd revisit this.
+The tradeoff: v2 isn't actively maintained. Future models may only ship on v3. If iOS Safari raises the memory limit, this decision is worth revisiting.
 
 ---
 
@@ -48,7 +48,7 @@ The iOS app already has LiDAR for space and YOLO for objects. It knows where thi
 
 The website has none of that. It needs the AI to do the descriptive work of a sighted companion: "hallway ahead, door on your left, floor slopes down." The "guide" prompt instructs the AI to talk that way and call out which direction is clear for walking.
 
-Keeping it in one Worker with a parameter means I deploy once and both clients get the latest prompts.
+Keeping it in one Worker with a parameter means one deploy ships the latest prompts to both clients.
 
 ---
 
@@ -90,7 +90,7 @@ It's not a privacy theater thing. The target users are blind. They can't read th
 
 If the screen only showed on first run, returning users would never hear the orientation again. They'd land directly in scanning mode with no audio cue. A user who hasn't opened the app in weeks might forget the gestures.
 
-The privacy screen also serves as the iOS audio unlock point. The first tap is guaranteed to be a user gesture, which is what iOS Safari needs to enable speech synthesis. Without this screen I'd have to find another guaranteed gesture moment, and there isn't a clean one.
+The privacy screen also serves as the iOS audio unlock point. The first tap is guaranteed to be a user gesture, which is what iOS Safari needs to enable speech synthesis. Without this screen the app would need another guaranteed gesture moment, and there isn't a clean one.
 
 There's now a silent mode reminder banner on the privacy screen too, because that was the single most common support question: "Why isn't it talking?" The answer was usually "Your phone is on silent."
 
@@ -112,7 +112,7 @@ Older versions had pill buttons across the homepage. A sighted user could see an
 
 The current homepage has two big mode cards: "See" (blue glow, primary) and "Hear" (neutral, secondary). The whole page also has a tap anywhere handler that starts guide mode. The Hear button calls `stopPropagation` so its tap doesn't fall through. Blind users just tap. Sighted users see the buttons. Everyone gets what they need.
 
-The hero copy is "Eyes and ears, when you need them." with a blue accent on the phrase "when you need them." The font is system humanist sans (`-apple-system`, `SF Pro Text`, `system-ui`) instead of the older monospace I started with. It reads conversationally instead of code adjacent.
+The hero copy is "Eyes and ears, when you need them." with a blue accent on the phrase "when you need them." The font is system humanist sans (`-apple-system`, `SF Pro Text`, `system-ui`) instead of the older monospace used at the start. It reads conversationally instead of code adjacent.
 
 The web welcome message plays on page load (where the browser allows): "Welcome to GuideDog. Press anywhere on the page for obstacle detection, or the second button for sounds and captions." It cancels the moment the user picks a mode.
 
@@ -122,7 +122,7 @@ The web welcome message plays on page load (where the browser allows): "Welcome 
 
 iOS Safari blocks `speechSynthesis.speak()` until a user gesture happens. If the app tries to speak before any touch or click, the utterance is silently dropped. No error. Just no audio.
 
-On the first user gesture I call `speak()` with an empty string, volume 0, and rate 10 (max). The user hears nothing because there's nothing to hear, but the engine is unlocked. After that primer, all subsequent `speak()` calls work regardless of whether they're inside a gesture handler or in an async callback.
+On the first user gesture, the code calls `speak()` with an empty string, volume 0, and rate 10 (max). The user hears nothing because there's nothing to hear, but the engine is unlocked. After that primer, all subsequent `speak()` calls work regardless of whether they're inside a gesture handler or in an async callback.
 
 The primer listeners attach to `document`, not to specific UI elements. An earlier version attached them to the alert area, but overlays (privacy screen, help screen) intercepted touches before they reached anything below. Document level listeners catch every touch on every overlay.
 

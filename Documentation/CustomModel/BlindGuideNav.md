@@ -2,7 +2,7 @@
 
 ## Overview
 
-BlindGuideNav is the custom object detection model I trained for GuideDog Vision. It recognizes 55 navigation relevant classes (curbs, crosswalks, stairs, doors, railings, traffic lights, wet floors, overhead obstacles). It runs in both the iOS app and the web PWA. On iOS it ships as a CoreML package and runs through the Vision framework. On web it ships as an ONNX file and runs through ONNX Runtime Web.
+BlindGuideNav is the custom object detection model trained for GuideDog Vision. It recognizes 55 navigation relevant classes (curbs, crosswalks, stairs, doors, railings, traffic lights, wet floors, overhead obstacles). It runs in both the iOS app and the web PWA. On iOS it ships as a CoreML package and runs through the Vision framework. On web it ships as an ONNX file and runs through ONNX Runtime Web.
 
 The model exists because general purpose object detectors waste capacity on classes a blind walker doesn't care about. A model trained on COCO knows how to find a teddy bear, a hot dog, and a pair of scissors. It does not know what a curb ramp looks like. BlindGuideNav puts its limited capacity on the things that affect walking safety.
 
@@ -22,7 +22,7 @@ The iOS app uses YOLOv8n (80 COCO classes). The website uses COCO-SSD (also 80 C
 
 A blind person walking through a city runs into these things constantly. They are exactly what a sighted companion would point out. They aren't in COCO, so they aren't in COCO trained models.
 
-Rather than fine tune YOLOv8n on top of its existing 80 class output head (which would still carry the COCO bias), I trained a new model from a curated 55 class dataset. The result is a smaller file (5.9 MB vs YOLOv8n's 6.2 MB) with a tighter decision boundary on the things that matter for navigation.
+Rather than fine tune YOLOv8n on top of its existing 80 class output head (which would still carry the COCO bias), a new model was trained from a curated 55 class dataset. The result is a smaller file (5.9 MB vs YOLOv8n's 6.2 MB) with a tighter decision boundary on the things that matter for navigation.
 
 ## How it works
 
@@ -55,7 +55,7 @@ The result is a final list of (class label, confidence, bounding box) tuples. Th
 
 ## The 55 classes
 
-I picked the classes by walking through real navigation scenarios and listing every object or feature that affects whether the path ahead is safe. They group into eight categories.
+The class list came out of walking through real navigation scenarios and noting every object or feature that affects whether the path ahead is safe. They group into eight categories.
 
 **Moving Hazards.** person, car, truck, bus, motorcycle, bicycle, scooter, wheelchair. Highest priority because they move and can cause injury on contact.
 

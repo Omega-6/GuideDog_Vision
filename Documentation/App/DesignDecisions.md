@@ -1,14 +1,14 @@
 # Design Decisions
 
-Every choice in this app came with a tradeoff. This doc records the reasoning behind the big ones, so if I (or someone else) wonders later why the code is the way it is, the answer is here.
+Every choice in this app came with a tradeoff. This doc records the reasoning behind the big ones, so anyone wondering later why the code is the way it is can find the answer here.
 
 ## Reason for Capacitator
 
 GuideDog Vision wraps a WKWebView inside a native Swift app using Capacitor 8.3. The detection engine, speech, haptics, and all sensor processing run in Swift. The UI runs in HTML and JavaScript.
 
-The alternative was a fully native SwiftUI app. I went with Capacitor for three reasons.
+The alternative was a fully native SwiftUI app. Capacitor was chosen for three reasons.
 
-First, iterating on the UI in HTML and CSS is much faster than waiting for Xcode rebuilds. The onboarding screens, alert boxes, status indicators, and gesture handlers all live in `index.html`. I could change layouts, colors, and copy without ever recompiling.
+First, iterating on the UI in HTML and CSS is much faster than waiting for Xcode rebuilds. The onboarding screens, alert boxes, status indicators, and gesture handlers all live in `index.html`. Layouts, colors, and copy could change without ever recompiling.
 
 Second, the same web layer could move to Android inside a Capacitor Android project later. The detection layer would need to be rewritten in Kotlin, but the UI transfers as is.
 
@@ -20,7 +20,7 @@ The tradeoff is the JS bridge. Every value crossing between Swift and JavaScript
 
 The web version uses COCO-SSD (TensorFlow.js). The iOS app uses YOLOv8n compiled to CoreML.
 
-YOLOv8n runs on the Apple Neural Engine through `VNCoreMLRequest`. The ANE is purpose built for inference and runs much faster than the CPU or GPU on the same model. COCO-SSD through TensorFlow.js can't reach the ANE from JavaScript, so I'd be leaving most of the chip's capability unused.
+YOLOv8n runs on the Apple Neural Engine through `VNCoreMLRequest`. The ANE is purpose built for inference and runs much faster than the CPU or GPU on the same model. COCO-SSD through TensorFlow.js can't reach the ANE from JavaScript, which would leave most of the chip's capability unused.
 
 YOLOv8n is also more accurate than COCO-SSD at comparable model size. The "nano" variant fits in 6.2 MB and still gets better detection performance.
 
@@ -30,9 +30,9 @@ Running it through Vision also means Apple handles the image preprocessing, orie
 
 YOLOv8n filters detections to a minimum confidence of 0.75 by default. A few classes have higher thresholds: refrigerator at 0.88, tv at 0.90, chair at 0.90, bed at 0.85, dining table at 0.85.
 
-I started at 0.5 during early testing and the false positive rate was rough. Shadows got called objects. Posters got called people. Reflective surfaces produced phantom detections. Every false positive triggered a spoken announcement. A blind user who keeps hearing "Person ahead" and finding nothing will stop trusting the app, which defeats the whole point.
+Early testing started at 0.5 and the false positive rate was rough. Shadows got called objects. Posters got called people. Reflective surfaces produced phantom detections. Every false positive triggered a spoken announcement. A blind user who keeps hearing "Person ahead" and finding nothing will stop trusting the app, which defeats the whole point.
 
-Raising the global threshold to 0.75 fixed most of it, but a handful of classes kept generating false positives at any reasonable threshold. Refrigerators got confused with white walls and large appliances. TVs lit up on every dark rectangular shape. Chairs are extremely overfit in COCO and triggered constantly. Beds and dining tables hallucinated indoors. For those classes specifically I raised the bar further.
+Raising the global threshold to 0.75 fixed most of it, but a handful of classes kept generating false positives at any reasonable threshold. Refrigerators got confused with white walls and large appliances. TVs lit up on every dark rectangular shape. Chairs are extremely overfit in COCO and triggered constantly. Beds and dining tables hallucinated indoors. Those classes specifically got the bar raised further.
 
 The cost of being conservative is missing some real detections at long range, where objects are small and indistinct. That's acceptable because the LiDAR depth band system still warns the user about "something ahead" even when the object detector isn't confident enough to name what it is.
 
@@ -82,7 +82,7 @@ The obvious way to measure the distance to a detected object would be to sample 
 
 The reason is coordinate space alignment. The camera image and the LiDAR depth map don't share the same pixel grid. They have different resolutions and slightly different fields of view. ARKit can project between the two but the projection involves interpolation that drifts at the edges of the frame.
 
-I noticed during testing that sampling the depth map at an object's bounding box would sometimes return the distance to the wall behind the object, not the object itself, because the depth pixel didn't quite land on the object surface.
+Testing revealed that sampling the depth map at an object's bounding box would sometimes return the distance to the wall behind the object, not the object itself, because the depth pixel didn't quite land on the object surface.
 
 Size triangulation avoids the issue entirely. It uses only the camera image (bounding box height) and the camera intrinsics (focal length from `ARFrame.camera.intrinsics`). Both live in the same coordinate space. The estimate is less precise than a perfect depth sample but it never returns a distance to the wrong surface.
 
@@ -110,9 +110,9 @@ The SpatialAudioController gets created 1 second after `start()` runs, not immed
 
 AVAudioEngine and AVSpeechSynthesizer don't get along during initialization. If both try to set up at the same time, the synthesizer can lose its audio output entirely. It reports `isSpeaking == true`, delegate callbacks fire, but no sound comes out. For a blind user, silent speech is catastrophic.
 
-I'm pretty sure the root cause is AVAudioEngine reconfiguring the audio session during init, and AVSpeechSynthesizer losing its audio route if it tries to speak during that reconfiguration. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance and locked in a route. After that, AVAudioEngine init doesn't disrupt it.
+The root cause appears to be AVAudioEngine reconfiguring the audio session during init, and AVSpeechSynthesizer losing its audio route if it tries to speak during that reconfiguration. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance and locked in a route. After that, AVAudioEngine init doesn't disrupt it.
 
-A one second delay is reliable across every device and iOS version I've tested. It's not a beautiful fix but the underlying AVFoundation behavior isn't well documented.
+A one second delay is reliable across every device and iOS version tested. It's not a beautiful fix but the underlying AVFoundation behavior isn't well documented.
 
 ## Why wall inference exists at all
 
@@ -120,7 +120,7 @@ The hardest scene to detect is a blank painted wall in good lighting. ARKit's me
 
 The wall inference fixes this. When the left, center, and right depth zones all read similar distances (the depth map is uniform) and no recent object detection in the center, the engine concludes there must be a wall and announces it with one of three messages by distance: "Wall ahead" under 3 m, "Wall, X feet" under 2 m, "Wall nearby" under 1 m. Depth processing now keeps running during `.limited(.insufficientFeatures)`, so the inference can still fire even when ARKit's tracking degrades.
 
-This is the single biggest improvement I've made for indoor failure modes. It backstops ARKit's mesh classifier exactly when it would otherwise fall over.
+This is the single biggest improvement to indoor failure modes. It backstops ARKit's mesh classifier exactly when it would otherwise fall over.
 
 ## Why the speech drops "feet" on non Pro phones
 

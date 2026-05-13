@@ -73,7 +73,7 @@ The engine is created when the user taps through the privacy and help screens. T
 
 ### Frame dispatch
 
-The `session(_:didUpdate:)` delegate fires at the AR frame rate (typically 30 fps). A frame counter tracks which frame we're on. Each detection layer runs at its own interval:
+The `session(_:didUpdate:)` delegate fires at the AR frame rate (typically 30 fps). A frame counter tracks the current frame number. Each detection layer runs at its own interval:
 
 | Layer | Interval | Effective rate | Thread |
 |---|---|---|---|
