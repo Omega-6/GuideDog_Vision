@@ -32,6 +32,15 @@ class MeshClassifier {
 
     /// Call from ARSession delegate, background thread OK.
     func classify(frame: ARFrame) {
+        // Diagnostic counters — see Xcode console output when investigating
+        // why a wall isn't being announced. Counts both ALL ARMeshAnchors
+        // in the frame and how many survive each filter stage.
+        var diagTotalAnchors = 0
+        var diagInRange = 0
+        var diagInFront = 0
+        var diagClassified = 0
+        var diagClassCounts: [String: Int] = [:]
+
         let cameraTransform = frame.camera.transform
 
         let camPos = SIMD3<Float>(cameraTransform.columns.3.x,
@@ -50,6 +59,7 @@ class MeshClassifier {
         for anchor in frame.anchors {
             guard let mesh = anchor as? ARMeshAnchor,
                   let classData = mesh.geometry.classification else { continue }
+            diagTotalAnchors += 1
 
             let anchorPos = SIMD3<Float>(mesh.transform.columns.3.x,
                                           mesh.transform.columns.3.y,
@@ -57,11 +67,17 @@ class MeshClassifier {
 
             let toAnchor = anchorPos - camPos
             let distance = length(toAnchor)
-            guard distance > 0.1, distance < 4.0 else { continue }
+            // Extended from 4.0m to 6.0m so walls at the end of a hallway
+            // get classified early instead of being silently filtered.
+            // The downstream processMeshHits gates announcements by
+            // surface type and distance, so the extra range is free.
+            guard distance > 0.1, distance < 6.0 else { continue }
+            diagInRange += 1
 
             // Only consider anchors broadly in front of the user (within ~60° cone)
             let dotFwd = dot(normalize(toAnchor), forwardDir)
             guard dotFwd > 0.5 else { continue }
+            diagInFront += 1
 
             // Determine lateral direction
             let dotRight = dot(normalize(toAnchor), rightDir)
@@ -82,11 +98,28 @@ class MeshClassifier {
             }
 
             guard let (dominantId, _) = counts.max(by: { $0.value < $1.value }),
-                  let cls = ARMeshClassification(rawValue: dominantId),
-                  cls != .none else { continue }
+                  let cls = ARMeshClassification(rawValue: dominantId) else { continue }
+            diagClassCounts[cls.label, default: 0] += 1
+            guard cls != .none else { continue }
+            diagClassified += 1
 
             hits.append(MeshHit(classification: cls, distance: distance, direction: direction))
         }
+
+        #if DEBUG
+        if diagTotalAnchors > 0 {
+            // Concise per-classify summary. Watch this in the Xcode
+            // console while pointing at the wall — if `inRange/inFront`
+            // is nonzero but `classified` is 0, ARKit can see geometry
+            // but can't decide what it is (`.none` returned). If `wall`
+            // never appears in classCounts, ARKit's classifier never
+            // labels the surface as wall — that's the failure mode
+            // that the depth-based wall inference (in NavigationEngine
+            // .applyDepthZones) is intended to backstop.
+            let breakdown = diagClassCounts.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: " ")
+            print("[MESH-SCAN] anchors:\(diagTotalAnchors) inRange:\(diagInRange) inFront:\(diagInFront) classified:\(diagClassified)  [\(breakdown)]")
+        }
+        #endif
 
         // Deduplicate: keep only closest hit per (classification, direction) pair
         var seen = Set<String>()
@@ -98,6 +131,15 @@ class MeshClassifier {
     /// Returns the closest navigation-relevant hit in the center zone, if any.
     var centerHit: MeshHit? {
         latestHits.first { $0.direction == "center" && $0.isNavigationRelevant }
+    }
+
+    /// Returns the closest wall regardless of direction. Surfaced so the
+    /// engine can warn about walls that would otherwise be hidden by a
+    /// chair or table that's nearer to centre. Walls are persistent
+    /// orientation landmarks; missing one because furniture is in the
+    /// way is a real navigation failure for a blind user.
+    var closestWall: MeshHit? {
+        latestHits.first { $0.classification == .wall }
     }
 }
 

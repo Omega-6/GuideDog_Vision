@@ -36,6 +36,23 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
     private(set) var hasLiDAR = false
 
     private var frameCount = 0
+    // Used by the DEBUG tracking-state logging in session(_:didUpdate:).
+    private var lastTrackingStateString: String = ""
+
+    private static func trackingStateString(_ s: ARCamera.TrackingState) -> String {
+        switch s {
+        case .normal: return "normal"
+        case .notAvailable: return "notAvailable"
+        case .limited(let r):
+            switch r {
+            case .initializing: return "limited(initializing)"
+            case .relocalizing: return "limited(relocalizing)"
+            case .excessiveMotion: return "limited(excessiveMotion)"
+            case .insufficientFeatures: return "limited(insufficientFeatures)"
+            @unknown default: return "limited(unknown)"
+            }
+        }
+    }
     private var lastDebugLog: TimeInterval = 0
 
     // Guards to prevent concurrent Vision/CoreML requests from piling up
@@ -212,29 +229,73 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         guard isRunning else { return }
         frameCount += 1
 
-        // LAYER 1: Depth (every 4th frame, LiDAR only)
-        // Skip when SLAM tracking is poor — depth readings are unreliable during initialization
-        let trackingGood: Bool
-        switch frame.camera.trackingState {
-        case .normal: trackingGood = true
-        default: trackingGood = false
+        #if DEBUG
+        // Tracking-state change logging — if walls aren't being detected,
+        // the first thing to check is whether ARKit dropped out of
+        // `.normal`. .limited(.insufficientFeatures) is the classic
+        // featureless-wall symptom.
+        let stateDesc = Self.trackingStateString(frame.camera.trackingState)
+        if stateDesc != lastTrackingStateString {
+            lastTrackingStateString = stateDesc
+            print("[TRACKING] state → \(stateDesc)")
         }
-        if hasLiDAR, frameCount % 4 == 0, trackingGood,
+        #endif
+
+        // LAYER 1: Depth (every 4th frame, LiDAR only)
+        //
+        // Tracking-state gating: LiDAR scene depth and Depth-Anything are
+        // both sensor / model based and don't actually need world-space
+        // visual tracking to produce a valid distance. The old gate
+        // (`.normal` only) caused depth to silently stop whenever the
+        // camera was pointed at a featureless plain wall — exactly the
+        // scenario that drops ARKit into `.limited(.insufficientFeatures)`.
+        // We now accept `.limited(.insufficientFeatures)` and
+        // `.limited(.relocalizing)` so the wall in front of the user
+        // keeps producing distance readings (and the wall-inference
+        // heuristic in applyDepthZones gets a chance to fire).
+        //
+        // Still gated: `.limited(.initializing)` (sensors warming up,
+        // readings garbage), `.limited(.excessiveMotion)` (motion blur
+        // invalidates depth), and `.notAvailable` (no AR at all).
+        let trackingOKForDepth: Bool
+        switch frame.camera.trackingState {
+        case .normal:
+            trackingOKForDepth = true
+        case .limited(let reason):
+            switch reason {
+            case .insufficientFeatures, .relocalizing: trackingOKForDepth = true
+            case .initializing, .excessiveMotion:      trackingOKForDepth = false
+            @unknown default:                          trackingOKForDepth = false
+            }
+        case .notAvailable:
+            trackingOKForDepth = false
+        }
+        // Other layers (object tracking, mesh classification) still want
+        // to know if SLAM is actually solid. iOS 15-compatible check —
+        // `.normal == .normal` only exists on the Equatable conformance
+        // added in iOS 16.
+        let trackingGood: Bool
+        if case .normal = frame.camera.trackingState { trackingGood = true } else { trackingGood = false }
+
+        if hasLiDAR, frameCount % 4 == 0, trackingOKForDepth,
            let depthMap = frame.sceneDepth?.depthMap {
             // Process depth on background thread to avoid blocking AR frame delivery
             detectionQueue.async { [weak self] in
                 self?.processDepth(depthMap)
             }
-        } else if !hasLiDAR, frameCount % 18 == 0, trackingGood, depthAnything?.isReady == true {
+        } else if !hasLiDAR, frameCount % 18 == 0, trackingOKForDepth, depthAnything?.isReady == true {
             // Non-Pro path: Depth-Anything every ~600ms (18 frames @ 30fps).
             // The processor short-circuits if a prior inference is in flight,
             // so we don't pile up requests on the Neural Engine.
             depthAnything?.processFrame(frame.capturedImage)
         }
 
-        // LAYER 2: Object detection — Vision + YOLOv8n CoreML (~1.5 FPS)
-        // isDetecting guard: skip if prior Vision request still running (prevents ANE pileup)
-        if frameCount % 20 == 0, detector.isReady, !isDetecting {
+        // LAYER 2: Object detection — Vision + YOLOv8n CoreML (~3 FPS)
+        // Tightened from every 20 frames to every 10 to halve the latency
+        // between an object entering view and being announced. The
+        // isDetecting guard below still prevents Neural Engine pileup if
+        // a previous Vision request hasn't finished.
+        if frameCount % 10 == 0, detector.isReady, !isDetecting {
             isDetecting = true
             detector.detect(pixelBuffer: frame.capturedImage)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
@@ -253,8 +314,13 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
                     if !currentLabels.contains(key) { self.detectionStreak[key] = 0 }
                 }
 
-                // Only pass objects with 2+ consecutive detections
-                let confirmed = objects.filter { self.detectionStreak[$0.label.lowercased()] ?? 0 >= 2 }
+                // Only pass objects with 3+ consecutive detections. Bumped
+                // from 2 to 3 when the detection rate doubled (every 10
+                // frames instead of 20) — false positives that persist
+                // for one or two frames now get filtered out before they
+                // reach the speech queue. End-to-end latency stays close
+                // to the original 20-frame × 2-streak path (~1 second).
+                let confirmed = objects.filter { self.detectionStreak[$0.label.lowercased()] ?? 0 >= 3 }
                 if !confirmed.isEmpty { self.processDetections(confirmed) }
 
                 self.isDetecting = false
@@ -400,7 +466,7 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             let rStr = sRight.map { String(format: "%.2fm", $0) } ?? "---"
             #if DEBUG
             let src = fromLiDAR ? "LIDAR " : "CAMERA"
-            print("📏 \(src) L:\(lStr)[\(riskString(riskL))]  C:\(cStr)[\(riskString(riskC))]  R:\(rStr)[\(riskString(riskR))]")
+            print("[DEPTH] \(src) L:\(lStr)[\(riskString(riskL))]  C:\(cStr)[\(riskString(riskC))]  R:\(rStr)[\(riskString(riskR))]")
             #endif
         }
 
@@ -422,6 +488,37 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         if bandEntered || criticalRepeat {
             centerBand = newBand
 
+            // Wall inference: when L/C/R depths are uniform (within 0.5m of
+            // each other), the surface in front is flat — almost always a
+            // wall. ARKit's mesh classifier often fails to label plain
+            // painted walls because they lack the visual features it needs
+            // to build classified mesh anchors. This depth-based heuristic
+            // catches those cases. Gated on (a) no recent object detection
+            // in the centre (so a fridge / chair spanning L/C/R doesn't
+            // get mislabeled as wall) and (b) no mesh classifier wall
+            // already announced for this region in the last 5s.
+            let wallLikely: Bool = {
+                guard let l = sLeft, let cc = sCenter, let r = sRight else {
+                    #if DEBUG
+                    print("[WALL-INFER] skipped: missing depth (L=\(sLeft as Any) C=\(sCenter as Any) R=\(sRight as Any))")
+                    #endif
+                    return false
+                }
+                let uniform = abs(l - cc) < 0.5 && abs(r - cc) < 0.5
+                let noRecentObject = (now - lastTier1Speech) > 2.0
+                let noRecentMeshWall = (lastAnnounced["mesh_wall_center"]?.time).map { (now - $0) > 5.0 } ?? true
+                let ok = uniform && noRecentObject && noRecentMeshWall
+                #if DEBUG
+                print(String(format: "[WALL-INFER] L=%.2f C=%.2f R=%.2f  uniform=%@ noObj=%@ noMesh=%@  → %@",
+                             l, cc, r,
+                             uniform ? "Y" : "N",
+                             noRecentObject ? "Y" : "N",
+                             noRecentMeshWall ? "Y" : "N",
+                             ok ? "WALL" : "no"))
+                #endif
+                return ok
+            }()
+
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.haptics?.updateFeedback(risk: riskC, distance: c)
@@ -430,11 +527,22 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
                 guard !self.isScanActive else { return }
 
                 switch newBand {
-                case 4: self.speech?.speak("Stop", urgency: 5.0)
-                case 3: self.speech?.speak("Stop, something close", urgency: 5.0)
-                case 2: self.speech?.speak("Heads up", urgency: 4.0)
-                case 1: self.speech?.speak("Something ahead", urgency: 3.0)
+                case 4:
+                    self.speech?.speak(wallLikely ? "Stop, wall" : "Stop", urgency: 5.0)
+                case 3:
+                    self.speech?.speak(wallLikely ? "Stop, wall close" : "Stop, something close", urgency: 5.0)
+                case 2:
+                    self.speech?.speak(wallLikely ? "Wall ahead" : "Heads up", urgency: 4.0)
+                case 1:
+                    self.speech?.speak(wallLikely ? "Wall ahead" : "Something ahead", urgency: 3.0)
                 default: break
+                }
+
+                // Stamp the wall-inference path through the same cooldown
+                // bucket the mesh classifier uses, so the two paths don't
+                // double-announce when ARKit catches up.
+                if wallLikely {
+                    self.lastAnnounced["mesh_wall_center"] = (distance: c, time: now)
                 }
             }
             if newBand == 4 { lastCriticalSpeak = now }
@@ -720,8 +828,16 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
             } else if r.dist < 1.0 {
                 text = "\(name) close \(r.direction)"
                 urgency = 5.0
-            } else {
+            } else if hasLiDAR {
+                // LiDAR gives true metric depth — safe to announce the
+                // exact distance to the user.
                 text = "\(name), \(feet) feet"
+                urgency = r.tier == 1 ? 4.0 : 3.0
+            } else {
+                // Non-Pro: distance is estimated (Depth-Anything + bbox
+                // triangulation). Announce direction only, no fake
+                // precision in feet.
+                text = "\(name) \(r.direction)"
                 urgency = r.tier == 1 ? 4.0 : 3.0
             }
 
@@ -745,15 +861,56 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
 
     // MARK: - Mesh Classification (walls, doors, floors from ARKit)
 
-    private func processMeshHits() {
-        guard let hit = meshClassifier.centerHit else { return }
-        let now = CACurrentMediaTime()
-
+    /// Announce a wall hit with three distance tiers and a tighter
+    /// cooldown than other mesh surfaces. Tiers:
+    ///   < 1.0m  → urgent "Wall nearby" (priority 5)
+    ///   < 2.0m  → "Wall, N feet" (priority 4)
+    ///   < 3.0m  → soft "Wall ahead" (priority 3) — early heads-up
+    /// Cooldown: 8s when far (was 15s for all surfaces), 3s when close.
+    private func announceWallHit(_ hit: MeshHit, now: TimeInterval) {
         let dir = hit.direction == "center" ? "" : " \(hit.direction)"
         let feet = String(format: "%.0f", hit.distance * 3.28084)
+        let key = "mesh_wall_\(hit.direction)"
+
+        if let prev = lastAnnounced[key] {
+            let timeSince = now - prev.time
+            let distChange = abs(hit.distance - prev.distance)
+            if hit.distance >= 1.0 && timeSince < 8.0 { return }
+            if hit.distance < 1.0 && timeSince < 3.0 { return }
+            if distChange < 0.5 && timeSince < 8.0 { return }
+        }
+
+        if hit.distance < RiskSolver.dangerThreshold {              // < 1.0m
+            speech?.speak("Wall nearby\(dir)", urgency: 5.0)
+            lastAnnounced[key] = (distance: hit.distance, time: now)
+        } else if hit.distance < RiskSolver.cautionThreshold {       // < 2.0m
+            speech?.speak("Wall\(dir), \(feet) feet", urgency: 4.0)
+            lastAnnounced[key] = (distance: hit.distance, time: now)
+        } else if hit.distance < 3.0 {                               // < 3.0m
+            speech?.speak("Wall ahead\(dir)", urgency: 3.0)
+            lastAnnounced[key] = (distance: hit.distance, time: now)
+        }
+    }
+
+    private func processMeshHits() {
+        let now = CACurrentMediaTime()
+
+        // Walls get processed independently of the closest-overall hit
+        // because a chair or table nearer the centre would otherwise mask
+        // the wall behind it. Walls are persistent structural landmarks
+        // so callouts at greater range (up to 3m) are useful, not noisy.
+        if let wall = meshClassifier.closestWall {
+            announceWallHit(wall, now: now)
+        }
+
+        // Then handle the closest navigation-relevant centre hit for
+        // non-wall surfaces (doors / seats / tables / windows).
+        guard let hit = meshClassifier.centerHit else { return }
+        if hit.classification == .wall { return }   // already covered above
+
+        let dir = hit.direction == "center" ? "" : " \(hit.direction)"
         let key = "mesh_\(hit.label)_\(hit.direction)"
 
-        // Same smart announcement logic — don't repeat unless distance changes or time passes
         if let prev = lastAnnounced[key] {
             let timeSince = now - prev.time
             let distChange = abs(hit.distance - prev.distance)
@@ -763,14 +920,6 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         }
 
         switch hit.classification {
-        case .wall:
-            if hit.distance < RiskSolver.dangerThreshold {
-                speech?.speak("Wall nearby\(dir)", urgency: 5.0)
-                lastAnnounced[key] = (distance: hit.distance, time: now)
-            } else if hit.distance < RiskSolver.cautionThreshold {
-                speech?.speak("Wall\(dir), \(feet) feet", urgency: 4.0)
-                lastAnnounced[key] = (distance: hit.distance, time: now)
-            }
         case .door:
             speech?.speak("Door\(dir)", urgency: 3.5)
             lastAnnounced[key] = (distance: hit.distance, time: now)
@@ -797,7 +946,7 @@ class NavigationEngine: NSObject, ARSessionDelegate, VoiceCommandDelegate {
         }
 
         #if DEBUG
-        print("🏗 MESH  \(hit.label) \(hit.direction) \(String(format: "%.2f", hit.distance))m")
+        print("[MESH-HIT] \(hit.label) \(hit.direction) \(String(format: "%.2f", hit.distance))m")
         #endif
 
         // Smart cloud AI trigger — fire when scene changes (different room/structure)

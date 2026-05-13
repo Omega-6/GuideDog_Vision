@@ -17,6 +17,14 @@ class ObjectDetector {
     private var vnModel: VNCoreMLModel?
     private var request: VNCoreMLRequest?
 
+    // Apple's first-party human-rectangle detector, used as a corroborator
+    // for YOLOv8n's `person` class. Person is by far the most common false
+    // positive (mannequins, posters, large coats, tall narrow shapes). When
+    // YOLO says "person" but VNDetectHumanRectanglesRequest sees no human
+    // rectangle in roughly the same region, the detection is dropped.
+    private var humanRequest: VNDetectHumanRectanglesRequest?
+    private var latestHumanBoxes: [CGRect] = []
+
     // Latest results
     private(set) var detectedObjects: [DetectedObject] = []
 
@@ -28,6 +36,19 @@ class ObjectDetector {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.loadModel()
         }
+
+        // Configure Apple's human detector synchronously — no model file
+        // needed, it ships with the Vision framework.
+        let req = VNDetectHumanRectanglesRequest { [weak self] request, _ in
+            let humans = (request.results as? [VNHumanObservation]) ?? []
+            self?.latestHumanBoxes = humans.map { $0.boundingBox }
+        }
+        // Default detects upper bodies only; switching to full body matches
+        // what YOLO sees (whole-person bounding boxes).
+        if #available(iOS 15.0, *) {
+            req.upperBodyOnly = false
+        }
+        humanRequest = req
     }
 
     // MARK: - Model Loading
@@ -98,7 +119,14 @@ class ObjectDetector {
             defer { self?.isProcessing = false }
 
             do {
-                try handler.perform([request])
+                // Order matters — humanRequest's completion fires before
+                // YOLO's, so by the time handleResults() runs, the human
+                // boxes for this frame are already cached in
+                // latestHumanBoxes and the person-validator can use them.
+                var requests: [VNRequest] = []
+                if let h = self?.humanRequest { requests.append(h) }
+                requests.append(request)
+                try handler.perform(requests)
             } catch {
                 print("❌ OBJECT DETECTOR: \(error.localizedDescription)")
             }
@@ -110,11 +138,44 @@ class ObjectDetector {
     private func handleResults(request: VNRequest, error: Error?) {
         guard let results = request.results as? [VNRecognizedObjectObservation] else { return }
 
-        // Filter out low-confidence noise
-        let minConfidence: Float = 0.7
+        // Filter out low-confidence noise. Default 0.75 (raised from 0.7
+        // when detection rate doubled). Per-class overrides tighten the
+        // gate further for classes that YOLO routinely hallucinates:
+        //   refrigerator — pattern-matches onto any tall rectangular
+        //     vertical surface (fridges, doors, large posters, lockers).
+        //   tv — false-fires on monitors, mirrors, paintings.
+        //   chair — pattern-matches onto the back of any seating, table
+        //     legs, generic four-legged silhouettes.
+        //   bed — fires on couches, large tables, ottomans, low flat
+        //     horizontal surfaces.
+        let defaultMin: Float = 0.75
+        let perClassMin: [String: Float] = [
+            "refrigerator": 0.88,
+            "tv": 0.90,
+            "chair": 0.90,
+            "bed": 0.85,
+            "dining table": 0.85,
+        ]
+
+        let humans = self.latestHumanBoxes
 
         let objects = results
-            .filter { ($0.labels.first?.confidence ?? 0) >= minConfidence }
+            .filter { obs in
+                let label = obs.labels.first?.identifier.lowercased() ?? ""
+                let conf  = obs.labels.first?.confidence ?? 0
+                let minC  = perClassMin[label] ?? defaultMin
+                return conf >= minC
+            }
+            .filter { obs in
+                // Person validator: when YOLO says "person", require
+                // Apple's VNDetectHumanRectanglesRequest to also see a
+                // human in roughly the same region (IoU ≥ 0.2). Other
+                // classes pass through unchanged.
+                let label = obs.labels.first?.identifier.lowercased() ?? ""
+                guard label == "person" else { return true }
+                let yoloBox = obs.boundingBox
+                return humans.contains { Self.iou($0, yoloBox) >= 0.2 }
+            }
             .prefix(5) // Keep top 5 at most
             .map { observation -> DetectedObject in
                 let topLabel = observation.labels.first!
@@ -126,6 +187,18 @@ class ObjectDetector {
             }
 
         detectedObjects = Array(objects)
+    }
+
+    // Intersection-over-union for two normalised bounding boxes. Used to
+    // confirm YOLO's "person" detection lines up with Apple's first-party
+    // human-rectangle output. Threshold of 0.2 is intentionally loose —
+    // we want to confirm overlap, not require pixel-perfect alignment.
+    private static func iou(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let inter = a.intersection(b)
+        guard !inter.isNull, inter.width > 0, inter.height > 0 else { return 0 }
+        let interArea = inter.width * inter.height
+        let unionArea = a.width * a.height + b.width * b.height - interArea
+        return unionArea > 0 ? interArea / unionArea : 0
     }
 
     // MARK: - Helpers

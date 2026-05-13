@@ -14,9 +14,13 @@ struct RiskSolver {
     static let cautionThreshold: Float = 2.0  // < 2.0m → caution (~6.6 ft, 1.7s reaction)
 
     // Hysteresis exit thresholds — must move THIS far away before risk level drops
-    // Prevents oscillation when LiDAR readings bounce at a threshold boundary
-    static let dangerExit: Float  = 1.3   // exit danger when center > 1.3m
-    static let cautionExit: Float = 2.4   // exit caution when center > 2.4m
+    // Prevents oscillation when LiDAR readings bounce at a threshold boundary.
+    // Tightened (1.3 → 1.1, 2.4 → 2.2) so the status badge stops lingering on
+    // the elevated risk level after the user has visibly moved past the
+    // obstacle. The gap is still wide enough to absorb single-frame noise
+    // but narrow enough that walking ~20cm clear of a wall drops the alert.
+    static let dangerExit: Float  = 1.1   // exit danger when center > 1.1m
+    static let cautionExit: Float = 2.2   // exit caution when center > 2.2m
 
     static func analyze(distance: Float?) -> RiskLevel {
         guard let distance = distance, distance > 0 else { return .safe }
