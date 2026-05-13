@@ -1,6 +1,6 @@
 # Speech, Spatial Audio, and Haptics
 
-## What makes this tricky
+## Technical Complexities
 
 Three audio channels (speech, spatial beeps, vibration) plus a fourth through the haptic engine. They have to coexist without interrupting each other or overwhelming the user.
 
