@@ -7,7 +7,7 @@ Roughly 2.2 billion people worldwide live with some form of vision impairment, i
 The app exists because every phone in someone's pocket already has cameras, a Neural Engine, and accelerometers. None of that hardware was being used to help blind people navigate. This project tries to change that.
 
 This app is not a guide dog and never will be. A dog makes its own safety calls, and a dog is a companion. What software can do is watch the scene, identify obstacles, and announce them. Read the [README](../../README.md) for the full problem writeup with citations.
-## What it is
+## Guide Dog
 
 The website is a Progressive Web App that helps blind and low vision people navigate using a phone's camera and microphone. Open the URL, grant camera permission, tap to start, and the system begins scanning.
 
@@ -15,11 +15,11 @@ The homepage gives the user two big options: "See" (the obstacle detection guide
 
 When the page loads, a welcome message plays: "Welcome to GuideDog. Press anywhere on the page for obstacle detection, or the second button for sounds and captions." It's cancelled the moment the user picks a mode.
 
-## Why a website exists alongside the app
+## Purpose of Website
 
 The iPhone app uses LiDAR, which lives on iPhone Pro models. Most phones don't have LiDAR. Many users can't or won't install an app from the App Store. The website is the universal fallback. Anything with a camera and a browser can run it.
 
-## How it works without LiDAR
+## Implementation without LiDAR
 
 Without LiDAR, the website can't measure absolute distances directly. It compensates with four overlapping layers:
 
