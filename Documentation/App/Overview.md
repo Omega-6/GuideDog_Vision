@@ -26,7 +26,7 @@ Any iPhone running iOS 15 or later with ARKit world tracking support. The experi
 
 **Non Pro iPhones.** The app still runs. Object detection, segmentation, and cloud AI all work normally. For depth, the app falls back to Depth-Anything, a neural depth estimator converted to CoreML for this project. It's less precise than LiDAR but gives useful distance warnings. On these phones, speech drops the "feet" suffix from announcements ("Person right" instead of "Person, 6 feet") because the distances are estimates rather than direct measurements.
 
-## What you get
+## Device Features
 
 ### On device detection
 
