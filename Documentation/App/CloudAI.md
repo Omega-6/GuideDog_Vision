@@ -1,6 +1,6 @@
 # Cloud AI Scene Description
 
-## Why cloud AI exists in the iOS app
+## Purpose
 
 The app already has LiDAR depth, ARKit mesh classification, YOLOv8n, BlindGuideNav, and DeepLabV3 all running on device. So why send anything to the cloud?
 
