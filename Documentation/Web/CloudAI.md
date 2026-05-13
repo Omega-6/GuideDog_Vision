@@ -1,6 +1,6 @@
 # Web Cloud AI Guide
 
-## Why cloud AI exists on the website
+## Purpose
 
 The website has no LiDAR, no ARKit, no Neural Engine. Browsers can't reach any of those sensors or accelerators even when the underlying hardware is present. The website only has the camera image and whatever models can run in the browser through TensorFlow.js or ONNX Runtime Web.
 
