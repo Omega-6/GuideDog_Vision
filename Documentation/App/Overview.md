@@ -2,7 +2,7 @@
 
 ## The problem this app addresses
 
-About **2.2 billion people** worldwide live with vision impairment. **43.3 million** are fully blind. **295.1 million** have moderate to severe vision loss. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people have one. The reasons are stacked: a single dog costs **$40,000 to $60,000** to train, training takes **two years**, only **one in three** dogs that enter a program actually graduate, and waiting lists run **one to three years**.
+Roughly 2.2 billion people worldwide live with some form of vision impairment, including 43.3 million who are completely blind and 295.1 million with moderate to severe visual impairment. The most well-known mobility aid is the guide dog, but only about 2 percent of blind people actually have one due to 4 major reasons: cost, training time, low graduation rates, and waiting lists. Each guide dog costs $40,000 to $60,000 per dog, and requires extra money and responsibility to keep health. Additionally, a long training time of two years paired with the low graduation rates of roughly one in three dogs graduating create a low supply of guide dogs. As a result, the waiting lists are generally 1-3 years, and these cap the supply far below what is needed.
 
 The app exists because every phone in someone's pocket already has cameras, a Neural Engine, and accelerometers. None of that hardware was being used to help blind people navigate. This project tries to change that.
 
