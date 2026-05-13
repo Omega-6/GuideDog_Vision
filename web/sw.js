@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v50';       // bumped — defensive null-checks for assist-screen buttons + diagnostic logs
+const CACHE = 'guidedog-v51';       // bumped — declare isNative at script top (was undefined, threw on mode select click)
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [

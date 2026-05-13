@@ -1735,6 +1735,19 @@
     </script>
 
     <script>
+      // ========== ENVIRONMENT ==========
+      // True when the page is running inside the iOS app's Capacitor
+      // WKWebView rather than a normal browser. The site as deployed to
+      // GitHub Pages is always !isNative, but a few code paths (welcome
+      // speech, tap-anywhere wiring) check this so the same HTML can be
+      // bundled inside the native app later without duplicating logic.
+      const isNative = !!(
+        typeof window !== "undefined" &&
+        window.Capacitor &&
+        typeof window.Capacitor.isNativePlatform === "function" &&
+        window.Capacitor.isNativePlatform()
+      );
+
       // ========== CONFIG ==========
       const CONFIG = {
         WORKER_URL: "https://guidedog.kpremks.workers.dev",
