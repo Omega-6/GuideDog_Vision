@@ -24,7 +24,7 @@ A blind person walking through a city runs into these things constantly. They ar
 
 Rather than fine tune YOLOv8n on top of its existing 80 class output head (which would still carry the COCO bias), a new model was trained from a curated 55 class dataset. The result is a smaller file (5.9 MB vs YOLOv8n's 6.2 MB) with a tighter decision boundary on the things that matter for navigation.
 
-## How it works
+## Implementation Overview
 
 Single stage object detector. Whole pipeline runs in one forward pass. Output is a list of bounding boxes, each tagged with class label and confidence.
 
