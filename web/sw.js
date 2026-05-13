@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v44';       // bumped — blind-hint moved above buttons
+const CACHE = 'guidedog-v45';       // bumped — logo icon added, title rule removed
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [

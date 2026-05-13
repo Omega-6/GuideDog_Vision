@@ -846,19 +846,28 @@
         margin: auto 0;
       }
 
+      /* Title row — icon + wordmark, aligned to the same baseline so
+         the green dot above the D sits visually next to the wordmark
+         rather than floating above it. */
+      .ms-title {
+        display: flex;
+        align-items: center;
+        gap: clamp(14px, 2vw, 22px);
+        margin: 0 0 clamp(20px, 4vw, 36px);
+      }
+      .ms-logo {
+        width: clamp(56px, 10vw, 110px);
+        height: clamp(56px, 10vw, 110px);
+        flex-shrink: 0;
+        display: block;
+      }
       .ms-wordmark {
         font-size: clamp(56px, 11vw, 120px);
         line-height: 1.0;
         font-weight: 700;
         letter-spacing: -0.02em;
-        margin: 0 0 18px;
+        margin: 0;
         color: #fff;
-      }
-
-      .ms-rule {
-        height: 1px;
-        background: rgba(255, 255, 255, 0.10);
-        margin-bottom: clamp(28px, 5vw, 44px);
       }
 
       .ms-hero {
@@ -1209,9 +1218,10 @@
     <!-- ── MODE SELECT ── -->
     <div id="modeSelect">
       <div class="ms-frame">
-        <h1 class="ms-wordmark">GuideDog</h1>
-
-        <div class="ms-rule" aria-hidden="true"></div>
+        <div class="ms-title">
+          <img src="logo.png" alt="" class="ms-logo" aria-hidden="true">
+          <h1 class="ms-wordmark">GuideDog</h1>
+        </div>
 
         <p class="ms-hero">
           Eyes and Ears <span class="ms-hero-accent">when you need them</span>.
