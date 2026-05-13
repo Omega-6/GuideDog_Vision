@@ -1,6 +1,6 @@
 # Web Architecture
 
-## What makes this tricky
+## Technical Complexities
 
 Running real time computer vision in a web browser, on a phone, on iOS Safari, with two ML models loaded at once, runs into hard memory and timing constraints. Most of the architecture exists to work around them.
 
