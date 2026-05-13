@@ -4,7 +4,6 @@
 
 The website provides two input methods: touch gestures and voice commands. Both are designed for blind users who can't see the screen. Gestures work without visual targeting. Voice commands accept natural phrasing.
 
----
 
 ## Touch gestures
 
