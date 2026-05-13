@@ -1,6 +1,6 @@
 # Web Overview
 
-## The problem this addresses
+## The Problem
 
 About **2.2 billion people** worldwide live with vision impairment. **43.3 million** are fully blind. Only about **2 percent** of blind people have a guide dog. Cost (**$40,000 to $60,000** per dog), training time (**two years**), graduation rates (**one in three**), and waiting lists (**one to three years**) cap supply far below need. The full breakdown is in the [README](../../README.md).
 
