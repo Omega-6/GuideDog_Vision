@@ -4,7 +4,7 @@
 
 The app already has LiDAR depth, ARKit mesh classification, YOLOv8n, BlindGuideNav, and DeepLabV3 all running on device. So why send anything to the cloud?
 
-The local layers are fast and reliable but they can't read context. They know a wall is 1.2 m ahead. They know a person is on the right at 3 m. They cannot tell you that the wall has a sign on it that says "Restroom," that the person is a store employee at a service counter, that the floor changes from tile to carpet at the doorway, or that the staircase ahead descends rather than ascends. These are exactly the things a sighted companion would mention. They require reading the scene as a whole, not just detecting individual objects.
+The local layers are fast and reliable but they can't read context. While they know a wall is 1.2 m ahead or that a person is on the right at 3 m, they cannot tell you that the wall has a sign on it that says "Restroom," that the person is a store employee at a service counter, that the floor changes from tile to carpet at the doorway, or that the staircase ahead descends rather than ascends. These are exactly the things a sighted companion would mention. They require reading the scene as a whole, not just detecting individual objects.
 
 A vision language model produces that kind of description from one camera frame in under three seconds. The cloud AI fills the gap between object detection and scene understanding. It's not a replacement for the local layers. It's a layer on top of them.
 
