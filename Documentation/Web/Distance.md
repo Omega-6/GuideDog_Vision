@@ -1,6 +1,6 @@
 # Web Distance
 
-## The problem
+## The Problem
 
 The iOS app has LiDAR. It measures distance in centimeters, in real time, without any inference. The website doesn't get any of that. Browsers can't access LiDAR even on iPhones that have the hardware. The only inputs available are the camera image and a depth model that produces relative depth values, not meters.
 
