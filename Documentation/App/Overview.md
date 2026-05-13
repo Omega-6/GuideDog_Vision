@@ -8,17 +8,17 @@ The app exists because every phone in someone's pocket already has cameras, a Ne
 
 This app is not a guide dog and never will be. A dog makes its own safety calls, and a dog is a companion. What software can do is watch the scene, identify obstacles, and announce them. Read the [README](../../README.md) for the full problem writeup with citations.
 
-## What the app does
+## Guide Dog
 
 GuideDog Vision turns an iPhone into a navigation assistant. The phone runs continuously while you walk. It announces obstacles, walls, doors, vehicles, and other hazards through speech, haptics, and spatial audio beeps. The user does not have to do anything to receive these alerts. The point is proactive protection. If you want more detail about what's around you, gestures and voice commands trigger a cloud AI scene description.
 
-## Who it's for
+## Target Audience
 
 Primary users are blind and low vision people. The interface is designed for eyes free operation. Everything important reaches you through speech and haptics. The visual UI is there for sighted helpers and for debugging.
 
 Secondary users are orientation and mobility instructors who might use the camera preview during training.
 
-## What devices work
+## Device Compatability
 
 Any iPhone running iOS 15 or later with ARKit world tracking support. The experience depends on the hardware.
 
