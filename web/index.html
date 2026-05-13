@@ -4792,15 +4792,21 @@
       }
 
       function startGuideMode() {
+        console.log("[mode] startGuideMode");
         // Cancel the web-only welcome so the privacy-screen audio
         // doesn't talk on top of "Welcome to GuideDog. Press anywhere…".
         cancelWebWelcome();
         state.appMode = "guide";
         document.getElementById("modeSelect").classList.add("hidden");
-        showPrivacyThenHelp();
+        try {
+          showPrivacyThenHelp();
+        } catch (e) {
+          console.error("[mode] showPrivacyThenHelp threw:", e);
+        }
       }
 
       function startAssistMode() {
+        console.log("[mode] startAssistMode");
         // Same cleanup as guide mode — the welcome was for sighted
         // navigation cues, not appropriate once they're inside.
         cancelWebWelcome();
@@ -4844,21 +4850,28 @@
       }
 
       function setupAssistButtons() {
-        document
-          .getElementById("btnModeGuide")
-          .addEventListener("click", () => {
+        console.log("[setup] setupAssistButtons running");
+        const guideBtn = document.getElementById("btnModeGuide");
+        const assistBtn = document.getElementById("btnModeAssist");
+        console.log("[setup] guide btn:", !!guideBtn, "assist btn:", !!assistBtn);
+
+        if (guideBtn) {
+          guideBtn.addEventListener("click", () => {
+            console.log("[click] btnModeGuide fired");
             unlockAudio();
             startGuideMode();
           });
-        document
-          .getElementById("btnModeAssist")
-          .addEventListener("click", (e) => {
+        }
+        if (assistBtn) {
+          assistBtn.addEventListener("click", (e) => {
+            console.log("[click] btnModeAssist fired");
             // Prevent the parent tap-anywhere handler from also firing
             // and immediately switching to guide mode.
             e.stopPropagation();
             unlockAudio();
             startAssistMode();
           });
+        }
 
         // Accessibility: blind users can't visually locate the START
         // button, so any tap on the mode-select page that ISN'T the
@@ -4879,12 +4892,14 @@
             startGuideMode();
           });
         }
-        document
-          .getElementById("btnAssistBack")
-          .addEventListener("click", leaveAssistMode);
+        const backBtn = document.getElementById("btnAssistBack");
+        if (backBtn) backBtn.addEventListener("click", leaveAssistMode);
+        else console.warn("[setup] btnAssistBack missing");
 
         // CC button in assist screen
-        document.getElementById("btnAssistCC").addEventListener("click", () => {
+        const ccBtn = document.getElementById("btnAssistCC");
+        if (!ccBtn) console.warn("[setup] btnAssistCC missing");
+        ccBtn && ccBtn.addEventListener("click", () => {
           unlockAudio();
           if (!state.captionRecognition) initCaptionRecognition();
           state.captionEnabled = !state.captionEnabled;
@@ -4918,9 +4933,9 @@
         });
 
         // Sound button in assist screen — reuse main toggleSoundDetection()
-        document
-          .getElementById("btnAssistSnd")
-          .addEventListener("click", async () => {
+        const sndBtn = document.getElementById("btnAssistSnd");
+        if (!sndBtn) console.warn("[setup] btnAssistSnd missing");
+        sndBtn && sndBtn.addEventListener("click", async () => {
             unlockAudio();
             await toggleSoundDetection();
             // Mirror state to assist button

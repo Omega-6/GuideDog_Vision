@@ -1,4 +1,4 @@
-const CACHE = 'guidedog-v49';       // bumped — fix mode cards in Safari (h2/p inside button auto-closed the button)
+const CACHE = 'guidedog-v50';       // bumped — defensive null-checks for assist-screen buttons + diagnostic logs
 const CDN_CACHE = 'guidedog-cdn-v3'; // bumped — added YAMNet CDN URL
 
 const CDN_SCRIPTS = [
