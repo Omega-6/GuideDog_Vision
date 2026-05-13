@@ -1,42 +1,55 @@
-# PWA Website Overview
+# Web Overview
 
-## The Problem
+## The problem this addresses
 
-Roughly **2.2 billion people** worldwide live with some form of vision impairment, including **43.3 million** who are completely blind and **295.1 million** with moderate to severe visual impairment. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people actually have one. Cost (**$40,000 to $60,000** per dog), training time (**two years**), low graduation rates (**roughly one in three** dogs make it through), and waiting lists (**one to three years**) cap the supply far below what is needed.
+About **2.2 billion people** worldwide live with vision impairment. **43.3 million** are fully blind. Only about **2 percent** of blind people have a guide dog. Cost (**$40,000 to $60,000** per dog), training time (**two years**), graduation rates (**one in three**), and waiting lists (**one to three years**) cap supply far below need. The full breakdown is in the [README](../../README.md).
 
-The native GuideDog Vision iOS app helps close part of this gap, but it requires an iPhone, ideally one with LiDAR. The PWA website goes further: it runs in any modern web browser on any device, with no app store installation, no LiDAR requirement, and no cost. See the [README](../../README.md) for the full problem statement and source citations.
+The iPhone app helps, but it requires an iPhone and works best with LiDAR. The website goes further. It runs in any modern browser on any phone, with no install, no LiDAR requirement, and no cost.
 
-## What It Is
+## What it is
 
-GuideDog Vision is a Progressive Web App (PWA) that helps blind and visually impaired users navigate their surroundings using a phone's camera and cloud AI. It runs in any modern web browser on any device. There is no app store installation required. Users open the URL, grant camera permission, and the system begins scanning automatically.
+The website is a Progressive Web App that helps blind and low vision people navigate using a phone's camera and microphone. Open the URL, grant camera permission, tap to start, and the system begins scanning.
 
-## Why a PWA Exists
+The homepage gives the user two big options: "See" (the obstacle detection guide) and "Hear" (sound detection and live captions). Tapping anywhere on the homepage starts guide mode automatically, which matters because the page is built to be used by someone who cannot see the buttons. The Hear button has its own touch handler that stops the tap from falling through to guide mode.
 
-The native iOS app has access to LiDAR hardware on iPhone Pro models, which provides precise depth sensing in real time. Most users do not have LiDAR devices. Many users cannot install native apps due to device restrictions, storage limits, or unfamiliarity with the App Store. The PWA serves as a universal fallback. Any device with a camera and a browser can run it.
+When the page loads, a welcome message plays: "Welcome to GuideDog. Press anywhere on the page for obstacle detection, or the second button for sounds and captions." It's cancelled the moment the user picks a mode.
 
-## How It Compensates for No LiDAR
+## Why a website exists alongside the app
 
-Without LiDAR, the PWA cannot measure absolute distances to objects. To compensate, it uses four detection layers working together:
+The iPhone app uses LiDAR, which lives on iPhone Pro models. Most phones don't have LiDAR. Many users can't or won't install an app from the App Store. The website is the universal fallback. Anything with a camera and a browser can run it.
 
-1. **COCO-SSD** runs object detection locally in the browser using TensorFlow.js. It identifies 19 navigation-relevant objects from the COCO dataset and estimates distance through known-object triangulation.
-2. **Depth-Anything** runs a relative depth estimation model locally using Transformers.js v2. It produces depth values from 0 to 255 that indicate relative nearness. These values are auto-calibrated against COCO-SSD detections when possible.
-3. **Fast Wall Check** uses pixel variance analysis on the camera feed. It detects uniform surfaces (walls, doors, flat obstacles) instantly with no ML inference. This runs every 50 milliseconds.
-4. **Cloud AI Guide** sends a camera frame to a Cloudflare Worker every 5 seconds. The cloud AI acts as a sighted guide companion, describing the scene and identifying hazards that the local models missed (stairs, wet floors, narrow passages, doors).
+## How it works without LiDAR
 
-The cloud AI is the primary differentiator between the PWA and native app. Because the PWA lacks LiDAR, the cloud AI fills the role of a sighted companion who describes what is ahead, what obstacles exist, which direction is clear, and what the floor conditions look like.
+Without LiDAR, the website can't measure absolute distances directly. It compensates with four overlapping layers:
 
-## Browser Compatibility
+COCO-SSD runs object detection locally through TensorFlow.js. It identifies 19 navigation relevant objects from the COCO dataset and estimates distance through known size triangulation.
 
-The PWA works on Chrome, Safari, and Firefox. It has been tested on iOS Safari, Android Chrome, and desktop browsers. HTTPS is required for camera access, as browsers block `getUserMedia` on insecure origins. The service worker enables offline caching of the app shell, though cloud AI features require an internet connection.
+Depth-Anything runs in the browser through Transformers.js v2. The output is a relative depth map (0 to 255). The website auto calibrates this against COCO-SSD detections that have known real world heights, so the relative depth turns into approximate meters.
 
-## Best on Mobile Devices
+The fast wall check is the pixel variance technique. A flat surface close to the camera fills the frame with uniform color and very few edges. Compute variance and edge density on a 64 by 48 crop every 50 ms and you can detect a wall with no ML at all. This runs faster than any model could.
 
-The app is optimized for mobile phones. The camera faces forward when held naturally. The interface uses large touch targets, gesture controls, and speech output designed for one-handed use while walking. Desktop browsers work but are not the intended use case, as users would need to carry a laptop or use an external webcam.
+The cloud AI guide sends a camera frame to a Cloudflare Worker every 5 seconds. It acts as the sighted companion, describing the scene and pointing out things the local models miss (stairs, wet floors, narrow passages, doors). This is the big differentiator from the iPhone app, which uses cloud AI only on demand because it has LiDAR.
 
-## PWA Features
+## Sound detection (Hear mode)
 
-The app registers a service worker (`sw.js`) and includes a web app manifest (`manifest.json`) that enables "Add to Home Screen" on both iOS and Android. The viewport is locked to prevent zoom (`maximum-scale=1`), and `touch-action: manipulation` prevents double-tap zoom delays. Text selection is disabled to avoid accidental selections during gesture use.
+Hear mode is a separate experience from guide mode. It listens to the microphone, classifies environmental sounds, and shows live captions of speech.
+
+Sound classification uses MediaPipe Audio Classifier with the YAMNet model, running through an AudioWorklet on the device. The taxonomy is bucketed into categories that matter for awareness: doorbell, alarm, siren, music, knock, dog bark, baby crying, and so on.
+
+Captions use the Web Speech API SpeechRecognition in continuous mode. Speech around the user gets transcribed on screen in real time.
+
+## Browser compatibility
+
+Tested on iOS Safari, Android Chrome, and desktop browsers. HTTPS is required for camera access because browsers block `getUserMedia` on insecure origins. The service worker (currently `guidedog-v48`) caches the app shell so the interface loads without a connection, though cloud AI needs the network.
+
+## Mobile first
+
+The interface is designed for one handed phone use while walking. Big touch targets, gestures, and speech output. Desktop browsers technically work but nobody is going to walk down the street holding a laptop.
+
+## PWA features
+
+The site registers a service worker (`sw.js`) and includes a web app manifest (`manifest.json`), so users can "Add to Home Screen" on iOS or Android. The viewport is locked (`maximum-scale=1`) and `touch-action: manipulation` prevents the double tap zoom delay. Text selection is disabled so gesture taps don't accidentally select things.
 
 ## Privacy
 
-All object detection and depth estimation run entirely on the user's device. Camera frames sent to the cloud AI are processed and immediately discarded. No images are stored. No account is required. No personal data is collected. The privacy screen is shown every time the app launches to remind users of these facts through spoken audio.
+All object detection, depth estimation, sound classification, and speech recognition runs on the user's device. Frames sent to the cloud AI for scene descriptions are processed and immediately discarded. No images stored. No account required. No personal data collected. The privacy screen is shown every launch and speaks the same information aloud through the welcome message.

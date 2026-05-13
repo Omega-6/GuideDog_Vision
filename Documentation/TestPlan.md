@@ -1,164 +1,218 @@
 # Test Plan
 
-## Native App Testing
+## iOS app
 
-### LiDAR Detection
-- Walk toward a wall. Verify distance updates in real time on screen.
-- Verify "Watch out" or "Stop" is spoken when within 3 feet.
-- Verify haptic feedback increases as distance decreases.
-- Walk away from the wall. Verify status returns to safe within 2 seconds.
-- Test in a hallway with walls on both sides. Verify left and right distances are reasonable.
+### LiDAR detection
 
-### Object Detection
-- Point camera at a person. Verify "Person" is announced within 2 seconds.
-- Point camera at a chair. Verify "Chair" is announced.
-- Verify that objects far away (beyond 15 feet) are not announced.
-- Verify ghost objects are filtered (point at a poster or shadow, confirm no false detection).
-- Walk past an object. Verify it is not repeated excessively.
+- Walk toward a wall. Distance updates in real time on screen.
+- "Watch out" or "Stop" spoken within 3 feet.
+- Haptic feedback gets faster as distance decreases.
+- Walk away. Status returns to safe within 2 seconds.
+- Hallway with walls on both sides. Left and right distances are reasonable.
 
-### Mesh Classification
-- Walk toward a door. Verify "Door" is announced.
-- Walk toward a wall. Verify "Wall" is detected and announced.
-- Walk near a window. Verify "Glass" is announced when close.
+### Object detection
 
-### Voice Commands
-- Hold screen and say "What's around." Verify a description is spoken.
-- Hold and say "Is it safe." Verify safety check response.
-- Hold and say "Left." Verify left side description.
-- Hold and say "Right." Verify right side description.
-- Hold and say "Stop." Verify alerts pause.
-- Hold and say "Resume." Verify alerts resume.
-- Hold and say "Help." Verify help text is spoken.
-- Hold and say "Scan." Verify cloud AI scan triggers.
+- Point at a person. "Person" announced within 2 seconds.
+- Point at a chair. "Chair" announced.
+- Far away objects (beyond 15 feet) are not announced.
+- Ghost filtering works (point at a poster or shadow, no false detection).
+- Walk past an object. Not repeated excessively.
+- YOLO + Apple human detector agreement: point at a poster of a person. "Person" should NOT be announced because Apple's human detector won't see a real human.
+
+### Wall inference
+
+- Point at a blank painted wall in good lighting. ARKit should drop to `.limited(.insufficientFeatures)`. Wall inference should still fire because all three depth zones are uniform.
+- Announcements should escalate by distance: "Wall ahead" under 3 m, "Wall, X feet" under 2 m, "Wall nearby" under 1 m.
+- `closestWall` accessor: verify the nearest wall gets announced regardless of which direction zone it's in.
+
+### Mesh classification
+
+- Walk toward a door. "Door" announced.
+- Walk toward a wall (with features for ARKit). "Wall" detected and announced.
+- Walk near a window. "Glass" announced when close.
+- Mesh range goes out to 6 meters (was 4); verify walls get caught earlier.
+
+### Voice commands
+
+- Hold screen and say "What's around." Description spoken.
+- "Is it safe." Safety check response.
+- "Left." Left side description.
+- "Right." Right side description.
+- "Stop." Alerts pause.
+- "Resume." Alerts resume.
+- "Help." Help text spoken.
+- "Scan." Cloud AI scan triggers.
 
 ### Cloud AI
-- Double tap to trigger a scan. Verify "Scanning" is spoken followed by a description.
-- Verify the cloud AI description mentions relevant features (doors, hallways, stairs if present).
-- Verify cloud AI does not repeat the exact same description consecutively.
-- Disconnect from internet. Double tap to scan. Verify local fallback description is spoken.
 
-### Camera Toggle
-- Tap the CAM button. Verify camera preview appears behind the UI.
-- Tap again. Verify camera preview disappears.
-- Verify all detection continues working with camera preview off.
+- Double tap. "Scanning" spoken, then a description.
+- Description mentions relevant features (doors, hallways, stairs if present).
+- Doesn't repeat the same description consecutively.
+- Disconnect internet. Double tap. Local fallback description spoken.
 
-### Privacy and Help Screens
-- Launch the app. Verify privacy screen appears.
-- Tap anywhere. Verify it transitions to the features screen.
-- Verify features screen is spoken aloud.
-- Tap anywhere. Verify the app starts and "Welcome to GuideDog" is spoken (or similar).
-- Kill and relaunch. Verify privacy and features screens appear again.
+### Camera toggle
+
+- Tap CAM. Camera preview appears behind the UI.
+- Tap again. Preview disappears.
+- All detection still works with preview off.
+
+### Privacy and help
+
+- Launch the app. Privacy screen appears.
+- Tap. Transitions to the features screen.
+- Features screen spoken aloud.
+- Tap. App starts.
+- Engine startup speech: "Loading. One moment." right away, then "GuideDog active." after the first depth callback.
+- Kill and relaunch. Privacy and features screens appear again.
 
 ### Permissions
-- On first install, verify camera permission dialog appears.
-- Verify microphone permission dialog appears when hold-to-speak is first used.
-- Verify speech recognition permission dialog appears.
-- Deny camera permission. Verify the app handles it gracefully (no crash).
 
-### Non-LiDAR Devices
-- Run on an iPhone without LiDAR (ex:. iPhone 13 mini).
-- Verify Depth-Anything model loads as fallback.
-- Verify wall/obstacle detection still functions (using depth model thresholds).
+- First install. Camera permission dialog appears.
+- Microphone permission appears when hold to speak is used.
+- Speech recognition permission appears.
+- Deny camera permission. App handles it (no crash).
+
+### Non LiDAR devices
+
+- Run on a non LiDAR iPhone (iPhone 13 mini).
+- Depth-Anything model loads as fallback (preloaded on launch).
+- Engine starts instantly when START tapped.
+- Wall and obstacle detection still functions.
+- Speech drops the "feet" suffix ("Person right" instead of "Person, 6 feet").
 
 ### AirPods and Bluetooth
-- Connect AirPods before launching the app.
-- Verify all speech plays through AirPods.
-- Verify AirPods remain connected (do not disconnect on app launch).
 
-### Screen Lock
+- Connect AirPods before launching.
+- All speech plays through AirPods.
+- AirPods stay connected.
+
+### Screen lock
+
 - Leave the app running without touching the screen.
-- Verify the screen does not turn off (idle timer disabled).
+- Screen doesn't turn off (idle timer disabled).
 
 ---
 
-## Website Testing
+## Website
 
 ### Detection
-- Open the website on a mobile phone. Allow camera access.
-- Point camera at a person. Verify detection is announced.
-- Point camera at a wall. Verify "Obstacle ahead" appears.
-- Verify the safety level (safe/warning/danger) changes on screen without delay.
 
-### Cloud AI Guide
-- After the app starts, wait 5 seconds. Verify a cloud AI description is spoken.
-- Verify descriptions are relevant to the actual scene.
-- Verify the same description does not repeat consecutively.
-- Double tap. Verify "Scanning" is spoken followed by a detailed description.
+- Open the website on a mobile phone. Allow camera.
+- Point at a person. Detection announced.
+- Point at a wall. "Obstacle ahead" appears.
+- Safety level changes on screen without delay.
 
-### Depth Model
-- Verify the AI badge shows "AI + Depth Active" after the depth model loads.
-- Walk toward a wall. Verify warning or danger state is triggered.
-- Walk away. Verify it returns to safe.
+### Cloud AI guide
+
+- Wait 5 seconds after the app starts. Cloud AI description spoken.
+- Descriptions are relevant to the scene.
+- Same description doesn't repeat consecutively.
+- Double tap. "Scanning" spoken, then detailed description.
+
+### Depth model
+
+- AI badge shows "AI + Depth Active" after the depth model loads.
+- Walk toward a wall. Warning or danger state triggered.
+- Walk away. Returns to safe.
 
 ### Gestures
-- Double tap. Verify cloud AI scan triggers.
-- Hold screen for 1 second. Verify "Listening" is spoken.
-- While holding, say "What's around." Verify response.
-- Swipe left. Verify left side description.
-- Swipe right. Verify right side description.
 
-### Privacy and Help Flow
-- Open the website. Verify privacy screen appears immediately.
-- Tap once. Verify "Welcome to GuideDog" and privacy summary are spoken.
-- Tap again. Verify features screen appears and is spoken.
-- Tap again. Verify the app starts.
+- Double tap. Cloud AI scan triggers.
+- Hold screen for 1 second. "Listening" spoken.
+- While holding, say "What's around." Response.
+- Swipe left. Left side description.
+- Swipe right. Right side description.
+
+### Homepage
+
+- Land on the homepage. Welcome message plays: "Welcome to GuideDog. Press anywhere on the page for obstacle detection, or the second button for sounds and captions."
+- Tap anywhere on the page. Welcome speech cancels. See mode (guide mode) starts.
+- Tap the "Hear" button specifically. Hear mode starts (not See mode).
+- Verify hero copy: "Eyes and ears, when you need them." with blue accent on "when you need them."
+
+### Hear mode
+
+- Sound classifier loads. Ring a doorbell or play a siren clip. Bucket label appears.
+- Speak nearby. Live captions appear.
+
+### Privacy and help
+
+- Open the website. Privacy screen appears immediately.
+- Silent mode reminder card is visible.
+- Tap once. "Welcome to GuideDog" and privacy summary spoken.
+- Tap again. Features screen appears and is spoken.
+- Tap again. App starts.
 
 ### Speech
-- Verify alerts are spoken (not just displayed visually).
-- Walk toward an obstacle. Verify "Watch out" is spoken on state change.
-- Walk away. Verify "Path clear" is spoken.
-- Verify cloud AI descriptions are spoken and audible.
 
-### Browser Compatibility
-- Test on iOS Safari (primary target).
-- Test on Chrome (desktop and Android).
-- Test on Firefox.
-- Verify camera access works on each browser.
-- Verify speech synthesis works on each browser.
+- Alerts are spoken (not just displayed).
+- Walk toward an obstacle. "Watch out" spoken on state change.
+- Walk away. "Path clear" spoken.
+- Cloud AI descriptions are spoken and audible.
 
-### Offline Behavior
-- Disconnect from internet.
-- Verify local detection (COCO-SSD, depth model, wall check) continues working.
-- Verify cloud AI gracefully fails (no crash, no infinite retry).
-- Verify AI backoff kicks in (retries after increasing delays).
+### Browser compatibility
+
+- iOS Safari (primary target).
+- Chrome (desktop and Android).
+- Firefox.
+- Camera access works on each.
+- Speech synthesis works on each.
+
+### Offline
+
+- Disconnect internet.
+- Local detection (COCO-SSD, depth model, wall check) keeps working.
+- Cloud AI fails gracefully (no crash, no infinite retry).
+- AI backoff kicks in (retries after increasing delays).
+
+### Service worker
+
+- Verify the cache version is `guidedog-v48`.
+- Reload offline. App shell loads from cache.
 
 ---
 
-## Edge Cases
+## Edge cases
 
-### Low Light
-- Test in a dimly lit room. Verify detection still functions (may be degraded).
-- Verify cloud AI can still describe the scene.
+### Low light
 
-### Camera Denied
-- Deny camera permission when prompted.
-- Verify the app/website does not crash.
-- Verify an appropriate error message is shown or spoken.
+- Dimly lit room. Detection still functions (may be degraded).
+- Cloud AI can still describe the scene.
 
-### Crowded Scene
-- Point camera at a room with many objects.
-- Verify only the most important object is announced (not all of them).
-- Verify no speech pile-up occurs.
+### Camera denied
 
-### Narrow Hallway
+- Deny camera permission.
+- App/website doesn't crash.
+- Appropriate error message is shown or spoken.
+
+### Crowded scene
+
+- Point at a room with many objects.
+- Only the most important object is announced.
+- No speech pile up.
+
+### Narrow hallway
+
 - Walk down a narrow hallway.
-- Verify walls are detected on sides.
-- Verify the app does not spam "obstacle" alerts constantly.
+- Walls detected on sides.
+- No constant "obstacle" alert spam.
 
-### Fast Movement
+### Fast movement
+
 - Walk quickly past objects.
-- Verify the app keeps up and does not announce stale detections.
+- App keeps up and doesn't announce stale detections.
 
 ---
 
-## Performance Benchmarks
+## Performance benchmarks
 
-| Metric | Native App | Website |
+| Metric | iOS App | Website |
 |--------|-----------|---------|
-| Object detection latency | Less than 100ms (CoreML) | 150-200ms (TensorFlow.js) |
-| LiDAR depth update | 130ms (every 4 frames) | N/A |
-| Wall check (pixel variance) | N/A | Less than 5ms |
-| Cloud AI response | 2-5 seconds | 2-5 seconds |
-| Speech initiation | Less than 50ms | Less than 100ms |
+| Object detection latency | < 100 ms (CoreML) | 150 to 200 ms (TensorFlow.js) |
+| LiDAR depth update | 130 ms (every 4 frames) | N/A |
+| Wall check (pixel variance) | N/A | < 5 ms |
+| Cloud AI response | 2 to 5 seconds | 2 to 5 seconds |
+| Depth-Anything (CoreML, iOS) | ~9 ms on iPhone 13 | N/A |
+| Speech initiation | < 50 ms | < 100 ms |
 | UI status update | Instant (no transition) | Instant (no transition) |
 | Memory usage | ~150 MB | ~200 MB (with depth model) |

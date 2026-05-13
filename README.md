@@ -1,35 +1,35 @@
 # GuideDog Vision
 
-AI powered navigation assistant for blind and visually impaired individuals.
+I built GuideDog Vision so a phone could do some of the things a guide dog does for a blind person. The iPhone app watches what's in front of you with LiDAR and computer vision and tells you what it sees. The website does the same thing without LiDAR, in any browser, on any phone.
 
 | App Store | Website |
 |:---:|:---:|
 | <img src="qr-app.png" alt="QR code for GuideDog Vision on the App Store" width="240"> | <img src="qr-website.png" alt="QR code for GuideDog Vision website" width="240"> |
 | Scan to download on iPhone | Scan to launch in your browser |
 
-## The Problem
+## Why I Built This
 
-### The Scale of Vision Loss
+### How many people this affects
 
-According to the World Health Organization, at least **2.2 billion people** worldwide live with some form of vision impairment. Of those, **43.3 million are completely blind** and another **295.1 million** have moderate to severe visual impairment [1]. The total is growing. Vision loss is projected to increase by roughly **55 percent by 2050**, affecting another **600 million people** on top of the current count [2].
+The World Health Organization counts about **2.2 billion people** worldwide living with some kind of vision impairment. **43.3 million** of them are fully blind. Another **295.1 million** have moderate to severe vision loss [1]. The number is climbing. Vision loss is projected to grow by **55 percent by 2050**, adding roughly **600 million more people** on top of where we are today [2].
 
-The impact reaches far beyond the inability to see. In the United States, the employment rate for people with visual impairments is around **44 percent**, compared to **77 percent** for people without disabilities [3]. People with vision loss are **1.6 to 2.8 times more likely to experience depression** than people with full vision, and a meaningful share report clinically significant depressive symptoms [4]. The day to day challenges (mobility, independence, employment, social connection) compound into mental health outcomes that affect life quality long after the initial diagnosis.
+The numbers I find hardest to read are the downstream ones. In the United States, the employment rate for blind and visually impaired adults sits around **44 percent**, compared to **77 percent** for everyone else [3]. People with vision loss are **1.6 to 2.8 times more likely** to develop depression [4]. Mobility, work, social life, mental health: it all compounds.
 
-### The Guide Dog Gap
+### The guide dog gap
 
-The most well known mobility aid for blind individuals is the guide dog. The reality is that almost no one who needs one actually has one. There are only about **10,000 working guide dog teams in the entire United States**, and globally only about **2 percent of blind and partially sighted people** work with a guide dog [5]. The other 98 percent navigate daily life without one.
+Most people, when they think about mobility for blind people, picture a guide dog. The reality is that almost nobody who needs one has one. There are about **10,000 working guide dog teams in the entire United States**. Globally, only about **2 percent** of blind people work with a guide dog [5]. The other 98 percent get by without one.
 
-Three major barriers explain the gap:
+Three reasons for the gap:
 
-**Cost:** Breeding, raising, and training a single guide dog costs between **$40,000 and $60,000** before the dog is ever placed with a handler [5][6]. Recipients do not usually pay this directly because nonprofit programs raise the money through donations, but the supply of trained dogs is permanently capped by how much funding exists. On top of the upfront cost, ongoing care runs roughly **$180 to $220 per month** for food, veterinary care, and supplies [5].
+A trained guide dog costs **$40,000 to $60,000** to breed, raise, and place [5][6]. Most handlers don't pay that directly because nonprofits raise the money, but the supply of dogs is capped by how much funding the nonprofits can pull in. After placement, the dog still costs **$180 to $220 a month** in food, vet care, and supplies [5].
 
-**Supply and Waiting Lists:** Even if cost were no object, the supply is limited by the training process itself. A guide dog takes about **two years to fully train**, and only about **one in three dogs** that enter a training program actually graduate [5]. Wait lists for an applicant matched with a trained dog stretch from **one year to three years** [7]. Some programs have suspended applications entirely because they cannot keep up with demand.
+Training takes time. A guide dog takes about **two years** to fully train, and only about **one in three dogs** that enter a training program actually graduate [5]. Waiting lists run **one to three years** [7]. Some programs have stopped taking applications because they cannot keep up.
 
-**Access and Responsibility.** Even after a handler receives a guide dog, the dog cannot go everywhere. Some venues require special accommodations or restrict working animals altogether. The dog itself needs daily exercise, food, grooming, veterinary care, and a safe living environment. A working animal is a long term commitment that not every blind person is positioned to take on.
+Even after placement, the dog cannot go everywhere. Some venues turn working animals away or require special accommodations. The dog itself needs a stable home, exercise, vet care, grooming. A working animal is a long term commitment that not everyone is positioned to take on.
 
-### Where GuideDog Vision Fits
+### Where this app fits
 
-GuideDog Vision was built to help close the gap. It does not replace a guide dog. A trained animal can do things software cannot, including making independent safety judgments and providing emotional companionship. What software can do is give a much larger population access to real time obstacle awareness, distance sensing, and scene understanding on hardware they already own. An iPhone in a pocket and a website in a browser are not a substitute for a partner who has been training for two years, but they are available right now, for free, to anyone who needs them.
+GuideDog Vision is not a guide dog. A trained animal makes its own safety calls and is a companion. Software cannot do either of those things. What software can do is run on a phone someone already owns, watch the scene in front of them, and tell them about it. That covers a real chunk of what a sighted helper would do, and it's available to anyone who can install an app or open a URL.
 
 ---
 
@@ -45,47 +45,55 @@ GuideDog Vision was built to help close the gap. It does not replace a guide dog
 
 ## Overview
 
-GuideDog Vision helps blind and visually impaired users navigate their surroundings safely. The native iOS app uses LiDAR, specialized AI models, and cloud AI to detect obstacles, walls, stairs, and other hazards in real time. The companion website provides the same core experience using browser based detection and a cloud AI guide that acts as a sighted companion.
+The project has two halves that share the same goal.
+
+The iPhone app uses ARKit LiDAR (on Pro models), YOLOv8n object detection, a custom 55 class navigation model I trained, Apple's mesh classifier for walls and doors, and a cloud AI fallback for scene descriptions. On non Pro iPhones it falls back to Depth-Anything, a neural depth estimator I converted to CoreML, so the app still works without LiDAR.
+
+The website is a Progressive Web App that runs in any modern browser. It has no LiDAR access at all, so it leans harder on machine learning: COCO-SSD for objects, Depth-Anything in the browser for relative depth, MediaPipe Audio Classifier for sound detection, the Web Speech API for live captions, and a cloud AI that runs every few seconds as a sighted companion.
+
+Both halves talk to the same Cloudflare Worker, which races Claude Haiku 4.5 against GPT-4.1-mini and returns whichever responds first.
 
 ## Project Structure
 
 ```
 GuideDog_Vision/
-├── app/                          # iOS native app (Capacitor + Swift)
+├── app/                          # iOS app (Capacitor + Swift)
 │   ├── ios/App/App/              # Swift source files + ML models
-│   ├── www/                      # Web UI layer
+│   ├── www/                      # WKWebView UI layer
 │   └── capacitor.config.json
-├── web/                          # PWA website (browser only, no LiDAR)
+├── web/                          # PWA website (no LiDAR)
 │   ├── index.html
 │   ├── manifest.json
 │   └── sw.js
 ├── CustomModel/
-│   └── BlindGuideNav.mlpackage   # Custom 55-class navigation model
+│   └── BlindGuideNav.mlpackage   # Custom 55 class navigation model
 ├── Documentation/
-│   ├── App/                      # Native app documentation
-│   ├── Web/                      # Website documentation
-│   ├── CustomModel/              # Custom model documentation
+│   ├── App/                      # iOS app docs
+│   ├── Web/                      # Website docs
+│   ├── CustomModel/              # Custom model docs
 │   ├── Privacy.md
 │   └── TestPlan.md
 ```
 
 ## Technology Stack
 
-| Component | Native App | Website |
+| Component | iOS App | Website |
 |-----------|-----------|---------|
 | Object Detection | YOLOv8n (CoreML) | COCO-SSD (TensorFlow.js) |
 | Custom Model | BlindGuideNav | BlindGuideNav |
 | Scene Segmentation | DeepLabV3 (CoreML) | N/A |
-| Depth Sensing | ARKit LiDAR | Depth-Anything (Transformers.js) |
+| Depth Sensing | ARKit LiDAR (with Depth-Anything fallback) | Depth-Anything (Transformers.js) |
 | Mesh Classification | ARKit sceneReconstruction | N/A |
-| Wall Detection | LiDAR depth thresholds | Pixel variance analysis |
+| Wall Detection | LiDAR thresholds + uniform zone inference | Pixel variance |
+| Sound Detection | N/A | MediaPipe Audio Classifier (YAMNet) |
+| Captions | N/A | Web Speech API SpeechRecognition |
 | Cloud AI | Claude Haiku 4.5 + GPT-4.1-mini | Claude Haiku 4.5 + GPT-4.1-mini |
-| Speech | AVSpeechSynthesizer | Web Speech API |
+| Speech Output | AVSpeechSynthesizer | Web Speech API |
 | Voice Input | SFSpeechRecognizer | Web Speech API |
 
 ## Documentation
 
-### Native App (iOS)
+### iOS App
 
 1. [Overview](Documentation/App/Overview.md)
 2. [Architecture](Documentation/App/Architecture.md)
@@ -109,7 +117,7 @@ GuideDog_Vision/
 8. [User Interface](Documentation/Web/UI.md)
 9. [Design Decisions](Documentation/Web/DesignDecisions.md)
 
-### Models and Reference
+### Models and reference
 
 - [BlindGuideNav Custom Model](Documentation/CustomModel/BlindGuideNav.md)
 - [Test Plan](Documentation/TestPlan.md)
@@ -117,31 +125,33 @@ GuideDog_Vision/
 
 ## Models
 
-| Model | Size | Classes | Platform |
+| Model | Size | Classes | Where |
 |-------|------|---------|----------|
-| YOLOv8n | 6.2 MB | 80 COCO | Native app | 
+| YOLOv8n | 6.2 MB | 80 COCO | iOS app |
 | BlindGuideNav | 5.9 MB | 55 navigation | Both |
-| DeepLabV3 | 21 MB | 21 PASCAL VOC | Native app | 
-| COCO-SSD | ~5 MB | 80 COCO | Website | 
-| Depth-Anything-small | ~25 MB | Depth map | Website + no-LiDAR fallback | 
+| DeepLabV3 | 21 MB | 21 PASCAL VOC | iOS app |
+| COCO-SSD | ~5 MB | 80 COCO | Website |
+| Depth-Anything (small) | ~47 MB FP16 | Depth map | Website + iOS fallback |
 | Claude Haiku 4.5 | Cloud | Vision + language | Both |
-| GPT-4.1-mini | Cloud | Vision + language | Both | 
+| GPT-4.1-mini | Cloud | Vision + language | Both |
 
 ## Requirements
 
-### Native App
-- iPhone with iOS 15 or later
-- Best experience on LiDAR-equipped iPhones (iPhone 12 Pro and later)
-- Camera and microphone access required
+### iOS app
+
+- iPhone running iOS 15 or later
+- Best on LiDAR equipped iPhones (12 Pro and later Pro models)
+- Camera and microphone access
 - Speech recognition permission for voice commands
 
 ### Website
-- Modern browser with camera support (Chrome, Safari, Firefox)
+
+- Any modern browser with camera support (Safari, Chrome, Firefox)
 - Internet connection for cloud AI features
-- HTTPS required (camera access)
+- HTTPS (browsers require it for camera access)
 
 ## Privacy
 
-All on-device detection runs locally. Cloud AI is used for scene descriptions and stair detection only. No images are stored after processing. No account required. No personal data collected.
+All on device detection runs locally. Camera frames sent to cloud AI for scene descriptions are processed and immediately discarded. No images get stored. No account. No personal data collected.
 
-See [Privacy Policy](Documentation/Privacy.md) for full details.
+Full details in the [Privacy Policy](Documentation/Privacy.md).

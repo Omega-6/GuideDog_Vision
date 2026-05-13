@@ -1,107 +1,129 @@
 # Design Decisions
 
-This document explains the reasoning behind each major technical decision in GuideDog Vision. Every choice involves a tradeoff. The goal here is to make those tradeoffs explicit so that future contributors understand not just what the code does, but why it does it that way.
+Every choice in this app came with a tradeoff. This doc records the reasoning behind the big ones, so if I (or someone else) wonders later why the code is the way it is, the answer is here.
 
-## Why Capacitor Over Pure Native
+## Why Capacitor, not pure SwiftUI
 
-GuideDog Vision uses Capacitor 8.3 to wrap a WKWebView inside a native Swift application. The detection engine, speech, haptics, and all sensor processing run in native Swift. The UI runs in the web layer.
+GuideDog Vision wraps a WKWebView inside a native Swift app using Capacitor 8.3. The detection engine, speech, haptics, and all sensor processing run in Swift. The UI runs in HTML and JavaScript.
 
-The alternative was to build the entire app in SwiftUI or UIKit. The reasons for choosing Capacitor:
+The alternative was a fully native SwiftUI app. I went with Capacitor for three reasons.
 
-**Web UI flexibility.** The onboarding screens, alert box, status indicators, and gesture handlers are all HTML and CSS. Updating the layout, colors, animations, or onboarding flow does not require recompilation. During development, this allowed rapid iteration on the visual design without waiting for Xcode build cycles.
+First, iterating on the UI in HTML and CSS is much faster than waiting for Xcode rebuilds. The onboarding screens, alert boxes, status indicators, and gesture handlers all live in `index.html`. I could change layouts, colors, and copy without ever recompiling.
 
-**Cross-platform potential.** The same HTML, CSS, and JavaScript can run on Android inside a Capacitor Android project. The native detection code would need to be rewritten in Kotlin, but the UI layer transfers directly. For a pure native app, both the UI and the detection layer would need to be rewritten.
+Second, the same web layer could move to Android inside a Capacitor Android project later. The detection layer would need to be rewritten in Kotlin, but the UI transfers as is.
 
-**Familiar tooling.** Web technologies have a lower barrier to entry for UI work. Contributors who know HTML and CSS can modify the interface without learning SwiftUI or UIKit layout systems.
+Third, web tech has a lower barrier for anyone who wants to contribute.
 
-The tradeoff is added complexity in the bridge layer. Every piece of data that crosses between Swift and JavaScript must be serialized and deserialized. The WKScriptMessageHandler and evaluateJavaScript calls add a small amount of latency compared to direct native UI updates. For GuideDog, this latency is acceptable because the web layer only handles display. All latency-sensitive operations (detection, speech, haptics) run entirely in Swift.
+The tradeoff is the JS bridge. Every value crossing between Swift and JavaScript has to serialize. For UI display this latency is fine. The detection, speech, and haptic paths never cross the bridge, so the safety critical stuff stays fast.
 
-## Why YOLOv8n Over COCO-SSD on Native
+## Why YOLOv8n on iOS, not COCO-SSD
 
-The web version of GuideDog uses COCO-SSD (TensorFlow.js) for object detection. The native version uses YOLOv8n compiled to CoreML format.
+The web version uses COCO-SSD (TensorFlow.js). The iOS app uses YOLOv8n compiled to CoreML.
 
-**Apple Neural Engine acceleration.** CoreML models run on the Apple Neural Engine (ANE), a dedicated hardware accelerator present in A11 and later chips. The ANE runs inference significantly faster and with less power consumption than the CPU or GPU. COCO-SSD running through TensorFlow.js in the web layer cannot access the ANE and runs on the CPU via WebAssembly or on the GPU via WebGL, both of which are slower.
+YOLOv8n runs on the Apple Neural Engine through `VNCoreMLRequest`. The ANE is purpose built for inference and runs much faster than the CPU or GPU on the same model. COCO-SSD through TensorFlow.js can't reach the ANE from JavaScript, so I'd be leaving most of the chip's capability unused.
 
-**Higher accuracy at comparable speed.** YOLOv8n (the "nano" variant) provides better detection accuracy than COCO-SSD while maintaining real-time inference speeds on the ANE. The smaller COCO-SSD model was originally chosen for web compatibility, but that constraint does not apply in the native layer.
+YOLOv8n is also more accurate than COCO-SSD at comparable model size. The "nano" variant fits in 6.2 MB and still gets better detection performance.
 
-**Vision framework integration.** Running YOLOv8n through Apple's Vision framework (`VNCoreMLRequest`) handles image preprocessing, orientation correction, and result parsing automatically. This reduces custom code and potential bugs compared to manually feeding tensors to a TensorFlow model.
+Running it through Vision also means Apple handles the image preprocessing, orientation correction, and result parsing. Less custom code, fewer places for bugs.
 
-## Why 0.7 Confidence Threshold
+## Why 0.75 default confidence, with class specific overrides
 
-The YOLOv8n detector filters results to a minimum confidence of 0.7 (70%).
+YOLOv8n filters detections to a minimum confidence of 0.75 by default. A few classes have higher thresholds: refrigerator at 0.88, tv at 0.90, chair at 0.90, bed at 0.85, dining table at 0.85.
 
-During testing at 0.5 (50%), the detector produced frequent false positives. Shadows on the ground were classified as objects. Posters and photographs were classified as people. Reflective surfaces generated phantom detections. Each false positive triggered a spoken announcement, which eroded user trust in the system. A blind user who hears "Person ahead" and finds nothing there will eventually start ignoring the app's alerts, which defeats the purpose of the safety system.
+I started at 0.5 during early testing and the false positive rate was rough. Shadows got called objects. Posters got called people. Reflective surfaces produced phantom detections. Every false positive triggered a spoken announcement. A blind user who keeps hearing "Person ahead" and finding nothing will stop trusting the app, which defeats the whole point.
 
-At 0.7, the false positive rate dropped dramatically. Real objects (actual people, actual chairs, actual cars) are consistently detected above 0.7 confidence. The tradeoff is that some legitimate detections at longer distances (where the object is small and less distinct in the image) may fall below 0.7 and be missed. This is acceptable because the LiDAR depth system provides distance warnings regardless of object identification. The user will still hear "Something ahead" from the distance band system even if the YOLO detector does not reach 0.7 confidence.
+Raising the global threshold to 0.75 fixed most of it, but a handful of classes kept generating false positives at any reasonable threshold. Refrigerators got confused with white walls and large appliances. TVs lit up on every dark rectangular shape. Chairs are extremely overfit in COCO and triggered constantly. Beds and dining tables hallucinated indoors. For those classes specifically I raised the bar further.
 
-## Why 2-Frame Consecutive Streak Filter
+The cost of being conservative is missing some real detections at long range, where objects are small and indistinct. That's acceptable because the LiDAR depth band system still warns the user about "something ahead" even when the object detector isn't confident enough to name what it is.
 
-Even at 0.7 confidence, occasional ghost detections appear for a single frame and then disappear. These are often caused by a momentary camera shake, a lighting change between frames, or a partial occlusion that resolves on the next frame.
+## Why YOLO "person" detections get validated by Apple's human detector
 
-The 2-frame streak filter requires an object to be detected in at least 2 consecutive YOLOv8n cycles (about 1.3 seconds apart at 1.5 fps) before it is announced. Ghost detections almost never persist across two consecutive frames. Real objects that are physically present in the scene almost always do.
+The single most embarrassing false positive in early testing was the app announcing "Person ahead" when the camera was pointing at a poster, a mannequin, or a photo. YOLO was confident, but it was wrong.
 
-The tradeoff is a one-cycle delay (approximately 0.67 seconds) before a new object is first announced. For stationary obstacles, this delay is negligible. For fast-moving objects (cars approaching), the approach speed detection system provides an independent fast path that does not wait for the streak filter.
+The fix: every YOLO "person" detection now runs through Apple's `VNDetectHumanRectanglesRequest`. Both detectors have to agree that there's a human in the same region of the frame before the app announces a person. If YOLO says yes and Apple says no, the detection is dropped.
 
-## Why 1 Announcement Per Cycle
+This double check costs a few milliseconds and only runs for the person class, but it almost completely eliminates the phantom person announcements that hurt user trust the most.
 
-When multiple objects are detected simultaneously, the engine selects exactly one to announce. It does not queue multiple announcements.
+## Why 3 consecutive frame ghost filter
 
-The problem with multiple announcements is staleness. AVSpeechSynthesizer queues utterances and plays them sequentially. If the engine detects three objects and queues three announcements, the second and third announcements play 2 to 4 seconds after the detections occurred. In that time, the user has continued walking. The objects may be behind the user by the time the announcements play. A blind user hearing "chair on left" when the chair is already behind them is confusing and potentially dangerous if it causes them to turn or stop unnecessarily.
+Even at 0.75 confidence, the occasional ghost detection still happens for a single frame. Usually it's a momentary camera shake, a lighting change, or a partial occlusion that resolves on the next frame.
 
-By announcing only the single most important object (highest tier, closest distance), the engine ensures that every announcement is current. On the next detection cycle, it can select a different object if needed. The rapid cycle rate (every 0.67 seconds at 1.5 fps) means that important secondary objects will be announced within one or two cycles.
+The streak filter requires an object to be detected in at least 3 consecutive YOLO cycles before it gets announced. YOLO runs every 10 frames (about 3 fps), so 3 cycles is roughly a second. Ghost detections almost never survive that long. Real objects almost always do.
 
-## Why Hysteresis on Distance Bands
+The cost is a small announcement delay for new objects (about a second). For stationary obstacles that doesn't matter. For fast moving threats (cars approaching, cyclists) the approach speed path bypasses the streak filter entirely.
 
-**What hysteresis is.** Hysteresis is the idea that the threshold for turning something on should be different from the threshold for turning it off. A familiar example is a home thermostat: it turns the heater on when the room drops to 68 degrees, but it does not turn the heater back off until the room rises to 70 degrees. The two degree gap prevents the heater from clicking on and off every few seconds when the temperature hovers right around 69. The same idea applies to any system where the input is noisy and the output should not flicker.
+## Why one announcement per cycle
 
-LiDAR depth readings are noisy in exactly this way. A wall that is 1.0 meters away might read as 0.98 m on one frame and 1.02 m on the next. Without hysteresis, the app would enter the danger band (below 1.0 m), exit it (above 1.0 m), enter it again, and so on, producing repeated "Stop, something close" announcements.
+When multiple objects show up at the same time, the engine picks exactly one to announce. It does not queue several.
 
-Adding hysteresis means the entry threshold and the exit threshold are not the same number. The user enters the danger band when the distance drops below 1.0 m, but the band does not clear until the distance rises above 1.3 m. This 0.3 m gap absorbs the normal oscillation range of LiDAR readings. The user hears one clean announcement when they approach an obstacle, and silence until they either get closer (triggering the critical band) or clearly move away (past 1.3 m).
+The problem with queuing is staleness. AVSpeechSynthesizer plays utterances sequentially. If you queue three announcements, the third one is talking about something the user already walked past. A blind user hearing "chair on left" when the chair is behind them is at best confusing and at worst dangerous if it makes them turn or stop.
 
-The same logic applies to caution (enter at 2.0 m, exit at 2.4 m) and approaching (enter at 3.0 m, exit at 3.3 m). The exit thresholds were determined during testing by observing the range of oscillation at each distance.
+Announcing just the highest priority, closest object on each cycle keeps every announcement current. If something else matters, the next cycle picks it up.
 
-## Why Beeps are Danger-Only
+## Why hysteresis on the distance bands
 
-An earlier version of the app played spatial audio beeps for both caution and danger levels. During indoor testing, caution beeps fired continuously. In a typical hallway, there is always a wall within 2 meters on at least one side. In a room, both side walls and the far wall may all be within caution range. The result was constant beeping that the user could not escape, which made the feature actively harmful rather than helpful.
+Hysteresis means the threshold for turning something on is different from the threshold for turning it off. A home thermostat is the classic example. It kicks the heater on when the room drops to 68 but doesn't turn it off until the room hits 70. That two degree gap stops the heater from clicking on and off every few seconds when the temperature hovers around 69. Same idea applies whenever your input is noisy and you don't want the output to flicker.
 
-Restricting beeps to danger-level threats (below 1.0 meter) means they only sound when the user is genuinely about to collide with something. In a normal room, the user can walk down the center of a hallway without hearing beeps, because the walls on either side are typically more than 1 meter away. When they approach a wall or obstacle closely enough to be at risk, the beep sounds with directional panning to indicate which side the danger is on.
+LiDAR depth readings are noisy in exactly this way. A wall 1.0 meter away might read 0.98 m on one frame and 1.02 m on the next. Without hysteresis, the app would enter the danger band (below 1.0 m), exit it, enter it again, and keep announcing "Stop, something close" on a loop.
 
-Caution-level feedback is still provided through haptic pulses (light, every 0.5 seconds) and speech ("Heads up"). These channels are less intrusive than audio beeps and do not create the same constant-noise problem.
+So the entry and exit thresholds are different numbers. Enter danger at 1.0 m, exit at 1.1 m. Enter caution at 2.0 m, exit at 2.2 m. The gap absorbs normal LiDAR oscillation. You hear one clean announcement when you approach the obstacle and silence until either you get closer (triggering the next band) or move clearly away.
 
-## Why Size-Based Triangulation Over Per-Pixel Depth Sampling
+## Why beeps are danger only
 
-The ideal approach for measuring the distance to a detected object would be to sample the LiDAR depth map at the exact pixel coordinates of the object's bounding box. The engine does include a `sampleDepthAt(box:)` method that does this, but the primary distance estimation uses size-based triangulation (pinhole camera model) instead.
+An earlier version played spatial audio beeps at both caution and danger levels. In testing, the caution beeps fired nonstop. Indoor rooms basically always have a wall within 2 meters somewhere. Hallways guarantee it on at least one side. The result was constant beeping with no way to escape it, which made the feature actively harmful.
 
-The reason is coordinate space alignment. The camera image and the LiDAR depth map do not share a 1:1 pixel correspondence. The depth map has a different resolution and field of view than the camera image. While ARKit provides methods to project between these coordinate spaces, the projection involves interpolation and can introduce errors, especially at the edges of the frame. During testing, per-pixel sampling at bounding box coordinates sometimes returned distances from the background (a wall behind the object) rather than from the object itself, because the depth map pixel did not align precisely with the object's surface.
+Restricting beeps to danger (under 1.0 m) means they only fire when you're genuinely about to walk into something. In a normal room, the center of a hallway gives you silence. When you get too close to a wall or object, the beep sounds with directional panning so you know which side the threat is on.
 
-Size-based triangulation avoids this problem entirely. It uses only the camera image (bounding box height) and the camera intrinsics (focal length), both of which are in the same coordinate space. The distance estimate is less precise than a perfect LiDAR sample would be, but it is consistently accurate and never returns a distance from the wrong surface.
+Caution feedback still comes through other channels: haptic pulses every 0.5 seconds and the spoken "Heads up." Those don't have the same constant noise problem.
 
-The zone-based LiDAR fallback (left/center/right thirds) provides a complementary depth signal that is cross-checked with the size-based estimate. When both agree, the average is highly accurate. When they disagree, the size-based estimate is trusted because it measures the specific object rather than an average over a zone.
+## Why size triangulation instead of per pixel LiDAR sampling
 
-## Why start() is Synchronous
+The obvious way to measure the distance to a detected object would be to sample the LiDAR depth map at the object's bounding box. The engine does have a `sampleDepthAt(box:)` method that does this. The primary path uses size triangulation through the pinhole camera model instead.
 
-An earlier version of the NavigationEngine's `start()` method was `async`. It awaited the ARSession configuration and run call. The problem was a race condition: `isRunning` was set to `true` before the `await` completed. The detection layers checked `isRunning` and began processing, but the ARSession had not yet started, so there were no frames to process. This caused silent failures where the detection system appeared to be running but was not producing any results.
+The reason is coordinate space alignment. The camera image and the LiDAR depth map don't share the same pixel grid. They have different resolutions and slightly different fields of view. ARKit can project between the two but the projection involves interpolation that drifts at the edges of the frame.
 
-The synchronous version sets `isRunning = true` and then immediately configures and runs the ARSession on the main thread. The detection layers will not receive any `session(_:didUpdate:)` callbacks until the ARSession has actually started delivering frames, so there is no race condition. The heavy initialization (HapticController, SpatialAudioController) is deferred with `asyncAfter` to avoid blocking the main thread, but the ARSession itself starts synchronously.
+I noticed during testing that sampling the depth map at an object's bounding box would sometimes return the distance to the wall behind the object, not the object itself, because the depth pixel didn't quite land on the object surface.
 
-## Why is Cloud AI on Scene Change, Not on a Timer
+Size triangulation avoids the issue entirely. It uses only the camera image (bounding box height) and the camera intrinsics (focal length from `ARFrame.camera.intrinsics`). Both live in the same coordinate space. The estimate is less precise than a perfect depth sample but it never returns a distance to the wrong surface.
 
-An earlier approach used a timer that triggered a cloud AI scan every 30 seconds. This had two problems:
+The zone based LiDAR distance (left, center, right thirds of the depth map) is still used as a cross check. When both methods agree within a meter, the engine averages them. When they disagree, size triangulation wins because it's measuring the specific object instead of an average over a zone.
 
-**Wasted API tokens.** If the user is standing still or walking down a long, featureless hallway, the scene does not change. Scanning every 30 seconds produces the same description repeatedly, consuming API quota without providing new information.
+## Why start() is synchronous
 
-**Missed scene changes.** If the user walks quickly through a doorway into a new room, the timer might not fire until 25 seconds later, long after the user has already navigated the transition.
+An earlier version of `NavigationEngine.start()` was `async`. The problem: `isRunning` got set to `true` before the `await` on the ARSession config returned. The detection layers checked `isRunning`, saw true, started running, and got nothing because the ARSession hadn't actually started delivering frames. The whole system looked like it was working but produced no output.
 
-The scene-change trigger solves both problems. It monitors the ARKit mesh classification for the center zone. When the dominant classification changes (for example, from "Wall" to "Door"), it indicates that the user has entered a new area. The cloud AI scan fires immediately, providing a description of the new environment when it is most useful. If the scene does not change, no scan fires, and no API tokens are spent.
+Making `start()` synchronous fixed it. `isRunning = true` happens, then the ARSession is configured and run on the main thread immediately. The detection layers can't run before they get their first `session(_:didUpdate:)` callback, so there's no race. The heavy controller initialization (haptics, spatial audio) is deferred with `asyncAfter` to avoid blocking the main thread, but the ARSession itself starts inline.
 
-The 20-second minimum interval between automatic scans prevents rapid-fire requests when the mesh classification oscillates (for example, at the threshold between a wall and a door).
+## Why cloud AI fires on scene change, not on a timer
 
-## Why SpatialAudioController is Delayed 1 Second After Engine Start
+An earlier approach scanned the scene every 30 seconds on a timer. Two problems.
 
-The SpatialAudioController is created 1.0 second after the NavigationEngine's `start()` method runs, rather than immediately.
+First, wasted tokens. If you're standing still or walking down a long featureless hallway, the scene doesn't change. Scanning every 30 seconds gives you the same description repeatedly and burns API quota.
 
-The reason is a conflict between AVAudioEngine and AVSpeechSynthesizer. When both are initialized at the same time, the speech synthesizer can lose its audio output. The synthesizer appears to be speaking (isSpeaking returns true, the delegate callbacks fire), but no audio is produced. This is a critical failure for a blind user.
+Second, missed transitions. If you walk briskly through a doorway into a new room, the timer might not fire for another 25 seconds, by which point the new environment is old news.
 
-The root cause appears to be that AVAudioEngine reconfigures the audio session's rendering pipeline during initialization, and if AVSpeechSynthesizer attempts to speak during that reconfiguration, its audio route is lost. By delaying the SpatialAudioController creation by 1 second, the engine ensures that the initial "Starting" speech has already begun playing through the synthesizer before AVAudioEngine is initialized. Once the synthesizer has an active audio route, the AVAudioEngine initialization does not disrupt it.
+Scene change triggering solves both. The engine monitors the ARKit mesh classification for the center zone. When the dominant classification flips (wall to door, for example), the cloud scan fires immediately. If nothing changes, nothing fires. The 20 second minimum interval between automatic scans stops rapid fire requests when mesh classification oscillates around a boundary.
 
-This timing-based workaround is not ideal, but the underlying AVFoundation behavior is not well documented. The 1-second delay has been reliable across all tested device and iOS version combinations.
+## Why SpatialAudioController is delayed 1 second
+
+The SpatialAudioController gets created 1 second after `start()` runs, not immediately.
+
+AVAudioEngine and AVSpeechSynthesizer don't get along during initialization. If both try to set up at the same time, the synthesizer can lose its audio output entirely. It reports `isSpeaking == true`, delegate callbacks fire, but no sound comes out. For a blind user, silent speech is catastrophic.
+
+I'm pretty sure the root cause is AVAudioEngine reconfiguring the audio session during init, and AVSpeechSynthesizer losing its audio route if it tries to speak during that reconfiguration. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance and locked in a route. After that, AVAudioEngine init doesn't disrupt it.
+
+A one second delay is reliable across every device and iOS version I've tested. It's not a beautiful fix but the underlying AVFoundation behavior isn't well documented.
+
+## Why wall inference exists at all
+
+The hardest scene to detect is a blank painted wall in good lighting. ARKit's mesh classifier needs visual features to track. A flat white wall has very few features, so ARKit drops into `.limited(.insufficientFeatures)` and stops returning useful mesh data. Without depth, the object detectors don't see anything either, because there's nothing in the frame to detect.
+
+The wall inference fixes this. When the left, center, and right depth zones all read similar distances (the depth map is uniform) and no recent object detection in the center, the engine concludes there must be a wall and announces it with one of three messages by distance: "Wall ahead" under 3 m, "Wall, X feet" under 2 m, "Wall nearby" under 1 m. Depth processing now keeps running during `.limited(.insufficientFeatures)`, so the inference can still fire even when ARKit's tracking degrades.
+
+This is the single biggest improvement I've made for indoor failure modes. It backstops ARKit's mesh classifier exactly when it would otherwise fall over.
+
+## Why the speech drops "feet" on non Pro phones
+
+When the app runs on a non LiDAR iPhone, depth comes from the Depth-Anything fallback. Those values are estimates, not direct sensor readings. Announcing "Person, 6 feet" implies a precision the system doesn't actually have.
+
+On non Pro phones, the speech drops the foot suffix and just says "Person right." The direction is reliable (it comes from the bounding box position in the image), but the distance is approximate so the announcement reflects that. On LiDAR phones, the foot count stays in because the measurement is real.

@@ -4,62 +4,62 @@
 
 Last updated: April 7, 2026
 
-## Data Collection
+## What gets collected
 
-GuideDog Vision does not collect, store, or share any personal data.
+Nothing. GuideDog Vision does not collect, store, or share any personal data.
 
 ## Camera
 
-The app uses your camera to detect obstacles and navigate your surroundings. All object detection and depth analysis runs entirely on your device. Camera images are not saved or transmitted during normal operation.
+The app uses your camera to watch for obstacles. All object detection and depth analysis runs on your device. Camera frames are not saved or transmitted during normal use.
 
-When you trigger a scan (by double tapping or using a voice command), a single camera frame may be sent to a cloud AI service for scene description. This image is processed in real time and immediately discarded after the response is generated. No images are retained by the cloud services after processing.
+When you trigger a scan (double tap, voice command, or the automatic guide scan on the website), one camera frame may be sent to a cloud AI service for a scene description. The image is processed and immediately discarded. Neither service retains the image.
 
 ## Microphone
 
-The app uses your microphone for voice commands only. Audio is processed on device using Apple's SFSpeechRecognizer (native app) or the Web Speech API (website). Audio is not recorded, stored, or transmitted.
+The app uses your microphone for voice commands. Audio is processed on your device through Apple's SFSpeechRecognizer (iOS) or the Web Speech API (website). On the website, the microphone also feeds a local sound classifier that listens for things like doorbells, alarms, and dog barks. No audio is recorded, stored, or transmitted.
 
 ## LiDAR
 
-LiDAR depth data is processed entirely on device and is never transmitted to any external service.
+LiDAR depth data is processed entirely on your device. It is never sent anywhere.
 
-## Cloud AI Services
+## Cloud AI
 
-When you trigger a scan, camera images may be sent to the following services for scene description:
+When a scan fires, a camera frame may be sent to:
 
-- **Anthropic (Claude Haiku 4.5):** processes the image and returns a text description
-- **OpenAI (GPT-4.1-mini):** processes the image and returns a text description
+- Anthropic (Claude Haiku 4.5) for a text scene description
+- OpenAI (GPT-4.1-mini) for a text scene description
 
-Both services are accessed through a Cloudflare Worker proxy. The image is sent, a text response is received, and the image is immediately discarded. Neither service retains the image after processing.
+Both run through a Cloudflare Worker proxy. The image goes up, a text response comes back, and the image is dropped. Neither provider keeps the image.
 
-On the website, the cloud AI runs automatically every 5 seconds as a guide companion. The same processing and discarding rules apply.
+The website runs this scan automatically every 5 seconds while guide mode is active, so the cloud AI works as a sighted companion. The same processing and discarding rules apply.
 
-## On Device Processing
+## On device models
 
-The following models run entirely on your device with no data transmission:
+These run entirely on your device with no network transmission:
 
 - YOLOv8n (object detection)
-- BlindGuideNav (custom navigation detection)
+- BlindGuideNav (custom 55 class navigation model)
 - DeepLabV3 (scene segmentation)
-- Depth-Anything (web depth estimation)
-- COCO-SSD (web object detection)
+- Depth-Anything (depth estimation, both website and the iOS non LiDAR fallback)
+- COCO-SSD (website object detection)
+- MediaPipe Audio Classifier (website sound detection)
 - ARKit LiDAR and mesh classification
 
-## No Account Required
+## No account
 
-GuideDog Vision does not require any sign up, login, or account creation. There is no user authentication system.
+No sign up. No login. No account.
 
-## No Personal Data
+## No personal data
 
-The app does not collect names, email addresses, location data, device identifiers, or any other personal information.
+The app does not collect names, email addresses, location, device identifiers, or anything else that identifies you.
 
-## Third Party Software Development Kits
+## Third party software
 
-The app uses the following third party components:
-
-- **Capacitor** (app framework): does not collect user data
-- **TensorFlow.js** (web ML runtime): runs locally, no data transmission
-- **Transformers.js** (web ML runtime): downloads model weights from HuggingFace CDN, no user data transmitted
+- **Capacitor** (iOS app framework): no user data collection
+- **TensorFlow.js** (website ML runtime): runs locally
+- **Transformers.js** (website ML runtime): downloads model weights from the HuggingFace CDN, no user data sent
+- **MediaPipe** (website audio classifier): runs locally
 
 ## Contact
 
-For questions about this privacy policy, visit https://github.com/Omega-6/GuideDog-Vision
+Questions about this policy: https://github.com/Omega-6/GuideDog-Vision

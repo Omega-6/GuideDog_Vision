@@ -1,145 +1,143 @@
-# Detection System
+# Web Detection
 
 ## Overview
 
-The PWA uses five detection layers that run concurrently. Each layer has different strengths, speeds, and failure modes. Together, they provide redundant coverage so that no single point of failure leaves the user unprotected.
+The website runs five detection layers concurrently. Each has different strengths, speeds, and failure modes. Stacking them means no single point of failure leaves the user unprotected.
 
-## What Makes This Pipeline Non Trivial
+## Pipeline tricks
 
-The website is running real time computer vision in a web browser, on a phone, with no LiDAR. Several techniques in this pipeline go beyond just calling a model and waiting for results:
+A few things in this pipeline are worth calling out specifically.
 
-- **Pixel variance wall check.** Pure JavaScript, no ML, runs in under 5 milliseconds. Detects flat surfaces by computing brightness variance and edge density across a 64 by 48 sample of the center frame. This is the safety net that protects the user during the 3 to 5 seconds it takes the COCO-SSD model to download.
-- **Asymmetric temporal smoothing.** Escalation is instant (a single frame can trigger danger), but de escalation requires 2 consecutive safe readings before the system relaxes. Being too cautious is fine, being too late is dangerous.
-- **Camera triangulation with a curated heights table.** The system uses real pinhole camera math to estimate distance from bounding box height, with a hand built table of 24 known object heights. See [Distance](Distance.md) for the full pipeline.
-- **Auto calibration of relative depth.** The Depth-Anything model only outputs unitless 0 to 255 values. The system bootstraps absolute distance measurements from those relative values by using triangulated detections as ground truth anchors. See [Distance](Distance.md).
-- **Two ML detectors sharing one runtime.** COCO-SSD (TensorFlow.js) and BlindGuideNav (ONNX Runtime Web) run on the same camera frames in the same protection loop. Their results merge into a single deduplicated list before the announcement system picks which object to speak.
-- **Center vs sides depth deviation.** Catches narrow obstacles (poles, signs, railings) that fill the center but not the periphery. A pure absolute threshold would miss these.
+The pixel variance wall check is pure JavaScript, no ML, under 5 ms. It detects flat surfaces by computing brightness variance and edge density across a 64 by 48 sample of the center frame. This is the safety net during the 3 to 5 seconds it takes COCO-SSD to download.
 
-Each technique is described in the layer sections below.
+Asymmetric temporal smoothing. Escalation is instant (a single frame can trigger danger). De escalation requires 2 consecutive safe readings before relaxing. Being too cautious is fine. Being too late is dangerous.
+
+Camera triangulation with a curated heights table. The system uses real pinhole camera math to estimate distance from bounding box height, with a hand built table of 24 known object heights. See [Distance](Distance.md).
+
+Auto calibration of relative depth. Depth-Anything outputs unitless 0 to 255 values. The system bootstraps absolute distances by using triangulated detections as ground truth anchors. See [Distance](Distance.md).
+
+Two ML detectors sharing one runtime. COCO-SSD (TensorFlow.js) and BlindGuideNav (ONNX Runtime Web) run on the same camera frames in the same protection loop. Their results merge into one deduplicated list before announcement.
+
+Center vs sides depth deviation catches narrow obstacles (poles, signs, railings) that fill the center but not the periphery. A pure absolute threshold would miss these.
 
 ---
 
-## Layer 1: COCO-SSD (Object Detection)
+## Layer 1: COCO-SSD
 
-**Runtime:** TensorFlow.js, loaded via `<script>` tag
-**Cycle:** Every 200ms in the protectionLoop
-**Model:** COCO-SSD v2.2.3, pretrained on the COCO dataset (80 classes)
+**Runtime:** TensorFlow.js loaded via `<script>` tag
+**Cycle:** every 200 ms in the protectionLoop
+**Model:** COCO-SSD v2.2.3, pretrained on COCO (80 classes)
 
-### Filtered Object Set
+### Filtered object set
 
-Of the 80 COCO classes, the system filters to 19 objects relevant to pedestrian navigation:
+Of the 80 COCO classes, the system uses 19 navigation relevant ones:
 
 - **Critical (vehicles):** car, bus, truck, motorcycle, bicycle
 - **Obstacles:** person, chair, bench, couch, bed, dining table, refrigerator, potted plant, backpack, fire hydrant, stop sign, parking meter, laptop, tv
 
-Detections below 0.7 confidence are discarded entirely. This threshold (`CONFIG.HIGH_CONFIDENCE`) was chosen to eliminate false positives that would cause unnecessary alerts. A false "person ahead" alert while walking in an empty hallway erodes user trust quickly.
+Detections below 0.7 confidence (`CONFIG.HIGH_CONFIDENCE`) are dropped. A false "person ahead" alert in an empty hallway erodes user trust fast.
 
-### Distance Estimation
+### Distance
 
-The full distance pipeline (known object triangulation, auto calibration of relative depth, approach rate detection, and center vs sides analysis) is documented in [Distance](Distance.md). In brief: detected objects with known real world heights are converted to absolute distances through pinhole camera geometry, and those distances are used to calibrate the depth model so that distances to unknown objects can also be estimated.
+The full distance pipeline (known size triangulation, auto calibration of relative depth, approach rate detection, center vs sides analysis) is documented in [Distance](Distance.md). Short version: detected objects with known real world heights are converted to absolute distances through pinhole camera geometry, and those distances calibrate the depth model so unknown objects get distance estimates too.
 
-### Position Classification
+### Position
 
-Each detection is classified by horizontal position based on the bounding box center:
-- **Left:** center X < 35% of frame width
-- **Right:** center X > 65% of frame width
-- **Ahead:** everything else
+Each detection is classified horizontally:
+- **Left:** center X < 35 percent
+- **Right:** center X > 65 percent
+- **Ahead:** in between
 
-An object is considered "in path" if its center X is between 25% and 75% of the frame width AND its center Y is below 30% from the top (meaning it is not floating in the sky).
+An object is "in path" if its center X is between 25 and 75 percent AND its center Y is below 30 percent from the top (so not floating in the sky).
 
-### Danger Classification
+### Danger class
 
-Objects are classified by category:
-- **Critical:** vehicles (car, bus, truck, motorcycle, bicycle)
-- **Obstacle:** all other tracked objects
-- **Low:** anything else
+- **Critical:** vehicles
+- **Obstacle:** other tracked objects
+- **Low:** everything else
 
-Distance zones determine the alert level:
-- **Danger zone:** less than 1.0 meter
-- **Warning zone:** less than 2.0 meters
-- **Awareness zone:** less than 4.0 meters
+Distance zones:
+- **Danger:** under 1.0 m
+- **Warning:** under 2.0 m
+- **Awareness:** under 4.0 m
 
 ---
 
-## Layer 2: Depth-Anything (Relative Depth Estimation)
+## Layer 2: Depth-Anything
 
 **Runtime:** Transformers.js v2 (`@xenova/transformers@2.17.2`), loaded as ES module
 **Model:** `Xenova/depth-anything-small-hf`, quantized
-**Cycle:** Every 400ms, fired from protectionLoop
+**Cycle:** every 400 ms from protectionLoop
 **Input:** 256x256 JPEG from video feed
-**Output:** Depth map with values 0 to 255 (higher = closer)
+**Output:** depth map with values 0 to 255 (higher = closer)
 
-### How It Works
+Three regions get sampled (center, left strip, right strip). Average values for each are stored in `state.depthHistory` as a rolling 6 frame window.
 
-The model produces a depth map with values from 0 to 255. Higher values mean closer. Three regions are sampled (center, left strip, right strip) and the average values for each region are stored in `state.depthHistory` as a rolling window of the last 6 readings.
-
-The relative depth values are turned into absolute distances and into actionable threat levels through the auto calibration and approach rate logic. See [Distance](Distance.md) for the full pipeline (calibration formula, approach rate detection, center versus sides deviation analysis).
+Relative depth values turn into absolute distances and into actionable threat levels through auto calibration and approach rate logic. Full pipeline in [Distance](Distance.md).
 
 ---
 
-## Layer 3: Fast Wall Check (Pixel Variance)
+## Layer 3: Fast wall check (pixel variance)
 
-**Runtime:** Pure JavaScript, no ML
-**Cycle:** Every 50ms in fastHazardLoop
+**Runtime:** pure JavaScript
+**Cycle:** every 50 ms in fastHazardLoop
 **Input:** 64x48 canvas grabbed from the video feed
-**Execution time:** Under 5 milliseconds
+**Execution time:** under 5 ms
 
-### How It Works
-
-A wall or flat surface close to the camera fills the frame with uniform color and few edges. Open space has texture variation, color gradients, and visible edges between objects.
+A wall close to the camera fills the frame with uniform color and few edges. Open space has texture variation, color gradients, and visible edges between objects.
 
 The algorithm:
 
-1. Grabs a 64x48 frame from the video (reuses a persistent canvas to avoid allocation)
-2. Samples the center strip: middle 50% width (pixels 16 to 48), middle 60% height (pixels 10 to 38)
-3. Computes brightness for each pixel using the luminance formula: `R * 0.299 + G * 0.587 + B * 0.114`
-4. Computes brightness variance across all sampled pixels
-5. Counts edges: adjacent pixels with brightness difference greater than 30
-6. Computes edge ratio: edge count divided by total sampled pixels
+1. Grab a 64x48 frame from the video (reuse a persistent canvas to avoid allocation).
+2. Sample the center strip: middle 50 percent width (pixels 16 to 48), middle 60 percent height (pixels 10 to 38).
+3. Compute brightness per pixel: `R * 0.299 + G * 0.587 + B * 0.114`.
+4. Compute brightness variance across all sampled pixels.
+5. Count edges: adjacent pixels with brightness difference > 30.
+6. Compute edge ratio: edge count divided by total sampled pixels.
 
 ### Thresholds
 
-| Variance | Edge Ratio | Result |
+| Variance | Edge ratio | Result |
 |----------|------------|--------|
 | < 150 | < 6% | DANGER (wall detected) |
 | < 350 | < 10% | WARNING (obstacle ahead) |
-| above both | above both | No detection |
+| above both | above both | no detection |
 
-Typical values observed in testing:
+Typical values in testing:
 - Wall at arm's length: variance 50 to 200, edge ratio under 0.05
 - Open room: variance 500 to 2000+, edge ratio above 0.15
 - Cluttered desk: variance 300 to 800, edge ratio 0.08 to 0.15
 
-This method is not ML inference. It is simple statistical analysis of pixel data. It runs in constant time regardless of scene complexity and cannot be slowed by model loading or GPU contention.
+This isn't ML inference. It's statistics on pixel data. Runs in constant time regardless of scene complexity. Can't be slowed by model loading or GPU contention.
 
 ---
 
 ## Layer 4: Cloud AI Guide
 
-**Runtime:** Cloudflare Worker proxying to Anthropic and OpenAI APIs
-**Cycle:** Every 5 seconds in protectionLoop
+**Runtime:** Cloudflare Worker at `guidedog.kpremks.workers.dev` proxying to Anthropic and OpenAI
+**Cycle:** every 5 seconds in protectionLoop
 **Input:** JPEG frame (960px max width, 0.75 quality) plus COCO-SSD detection context
-**Output:** Natural language description, parsed into structured hazard data
+**Output:** natural language description, parsed into structured hazard data
 
-### Guide Mode
+### Guide mode
 
-The website sends `mode='guide'` to the Cloudflare Worker, which triggers the `SYSTEM_PROMPT_GUIDE` prompt. This prompt instructs the AI to act as a sighted guide companion walking beside a blind person. The AI describes what is ahead, identifies obstacles, stairs (only if clearly visible), doors, floor conditions, general surroundings, and which direction is clear. Responses are limited to under 15 words.
+The website sends `mode='guide'`, which triggers the `SYSTEM_PROMPT_GUIDE`. This prompt instructs the AI to act as a sighted guide companion walking beside a blind person. The AI describes what is ahead, obstacles, stairs (only if clearly visible), doors, floor conditions, surroundings, and which direction is clear. Responses are limited to under 15 words.
 
-### COCO-SSD Context
+### COCO-SSD context
 
-The request includes up to 5 high-confidence COCO-SSD detections formatted as `"person 6ft ahead, chair 3ft left"`. This context tells the AI what the local model already found, so the AI can focus on things the local model missed (stairs, floor conditions, signage, narrow passages).
+The request includes up to 5 high confidence COCO-SSD detections formatted like `"person 6ft ahead, chair 3ft left"`. This tells the AI what the local model already found, so the AI focuses on things the local model missed (stairs, floor conditions, signage, narrow passages).
 
-### Racing Providers
+### Racing providers
 
-The system sends the request to both Anthropic and OpenAI simultaneously via `Promise.any()`. The first response to arrive is used. This reduces latency and provides automatic failover if one provider is down.
+Both Anthropic and OpenAI receive the same request via `Promise.any()`. First response wins. Reduces latency and provides automatic failover if one provider is slow.
 
-### Hazard Parsing
+### Hazard parsing
 
-The `parseAIResult` function searches the AI response text for hazard keywords:
+`parseAIResult` searches the AI response for hazard keywords:
 
 | Pattern | Level | Key |
 |---------|-------|-----|
-| stair, step down, drop-off, ledge | DANGER | stairs |
+| stair, step down, drop off, ledge | DANGER | stairs |
 | car/vehicle/truck approaching | DANGER | vehicle |
 | wall, dead end, blocked, barrier | WARNING | wall |
 | step up, curb, raised, bump | WARNING | step_up |
@@ -149,28 +147,28 @@ The `parseAIResult` function searches the AI response text for hazard keywords:
 | hazard, caution, obstacle | WARNING | hazard |
 | path clear, no hazard, safe | CLEAR | (clears AI hazard) |
 
-Results are spoken directly via `speakAlert` at priority 2 (warning) or priority 3 (danger). AI hazards persist with a time-to-live of 4 seconds for danger and 3 seconds for warnings.
+Results are spoken through `speakAlert` at priority 2 (warning) or 3 (danger). AI hazards persist with a TTL of 4 seconds for danger, 3 seconds for warnings.
 
-### Backoff on Errors
+### Backoff
 
-When the Cloudflare Worker returns an error or the request fails, the system applies exponential backoff: 10 seconds, 20 seconds, 40 seconds, up to a maximum of 60 seconds. The backoff counter resets on any successful response. This prevents hammering a broken endpoint and wasting battery on failed network requests.
+When the Worker errors or the request fails, exponential backoff kicks in: 10 s, 20 s, 40 s, up to 60 s max. The counter resets on any successful response. Prevents hammering a broken endpoint.
 
 ---
 
-## Layer 5: BlindGuideNav Custom Model
+## Layer 5: BlindGuideNav
 
-**Runtime:** ONNX Runtime Web with the WebAssembly backend
-**Model:** `BlindGuideNav.onnx`, a custom 55 class navigation focused detector exported from PyTorch
-**Cycle:** Interleaved with COCO-SSD in the protectionLoop (200ms cycle)
-**Inference time:** Roughly 80 to 150 ms per frame on a modern phone browser
+**Runtime:** ONNX Runtime Web with WebAssembly backend
+**Model:** `BlindGuideNav.onnx`, custom 55 class navigation focused detector exported from PyTorch
+**Cycle:** interleaved with COCO-SSD in protectionLoop (200 ms)
+**Inference time:** 80 to 150 ms per frame on a modern phone browser
 
-### Why This Layer Exists
+### Why it exists
 
-COCO-SSD is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for features that matter most to a blind walker: stairs (going up and going down as separate classes), curbs, crosswalks, doors (open and closed), railings, wet floors, traffic signals, and overhead obstacles. See [BlindGuideNav](../CustomModel/BlindGuideNav.md) for the full class list, the architecture, and the training details.
+COCO-SSD is great at people, vehicles, and indoor furniture, but it doesn't know what a curb ramp is. COCO doesn't have navigation labels. BlindGuideNav fills that gap with stairs (up and down as separate classes), curbs, crosswalks, doors (open and closed), railings, wet floors, traffic signals, and overhead obstacles. Class list and training in [BlindGuideNav](../CustomModel/BlindGuideNav.md).
 
 ### Integration
 
-The model loads through ONNX Runtime Web alongside COCO-SSD. Both detectors run inside the protection loop on the same camera frame. Their outputs merge into a single deduplicated list of detections before the announcement system picks which object to speak. The downstream announcement logic does not know or care which model produced a given detection. It only needs the class label, position, and distance estimate.
+The model loads through ONNX Runtime Web alongside COCO-SSD. Both run on the same camera frame. Their outputs merge into one deduplicated list before announcement picks what to speak. The downstream logic doesn't care which model produced a detection. It only needs class label, position, and distance.
 
 ```javascript
 const session = await ort.InferenceSession.create('models/BlindGuideNav.onnx', {
@@ -179,19 +177,19 @@ const session = await ort.InferenceSession.create('models/BlindGuideNav.onnx', {
 });
 ```
 
-### Why ONNX Instead of TensorFlow.js
+### Why ONNX, not TensorFlow.js
 
-ONNX Runtime Web uses a single shared WebAssembly module that all loaded ONNX models run through. TensorFlow.js loads its own runtime in addition to the COCO-SSD model. Adding a TensorFlow.js conversion of BlindGuideNav on top of the existing COCO-SSD load would double the runtime memory cost. Routing BlindGuideNav through ONNX Runtime Web shares the runtime across both formats and keeps the per tab memory budget under iOS Safari's limit.
+ONNX Runtime Web uses one shared WebAssembly module for all loaded ONNX models. TensorFlow.js loads its own runtime in addition to the COCO-SSD model. Adding a TF.js conversion of BlindGuideNav on top of COCO-SSD would double the runtime memory cost. ONNX shares the runtime and keeps the per tab memory budget under iOS Safari's limit.
 
 ---
 
-## Temporal Smoothing
+## Temporal smoothing
 
-Temporal smoothing means using more than one frame's worth of information before deciding what to display. Without it, every frame's detection result would be shown immediately, and any single bad frame would cause a visible flicker. With it, the displayed state lags slightly behind the raw detection but does not jump around.
+Temporal smoothing means using more than one frame's information before deciding what to show. Without it, every frame's detection result would flash on screen, and any single bad frame would cause visible flicker.
 
-The smoothing is asymmetric, meaning the rule for escalating to a more dangerous state is different from the rule for relaxing back to a safer state:
+The smoothing is asymmetric:
 
-- **Escalation is instant.** If any single frame detects a danger or warning, the system immediately escalates to that level. There is no delay or confirmation required for threats. Being slow to warn is more dangerous than being too cautious.
-- **De-escalation requires confirmation.** The system requires 2 consecutive safe readings before returning to the safe state. This prevents a single missed detection from briefly showing "Path Clear" when an obstacle is still present.
+- **Escalation is instant.** Any single frame at danger or warning level immediately escalates. No confirmation needed. Being slow to warn is more dangerous than being too cautious.
+- **De escalation needs confirmation.** Two consecutive safe readings required before returning to safe. Prevents a single missed detection from briefly showing "Path Clear" while an obstacle is still present.
 
-The `_threatHistory` array stores the last 5 raw threat readings. Only the most recent `SAFE_CONFIRM_COUNT` readings are checked for de-escalation. If all of them are safe, the system transitions to safe. Otherwise, it holds the previous threat level.
+The `_threatHistory` array stores the last 5 raw threat readings. Only the most recent `SAFE_CONFIRM_COUNT` readings are checked for de escalation. If all of them are safe, the system transitions to safe. Otherwise, the previous threat level holds.

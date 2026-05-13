@@ -1,158 +1,180 @@
-# Detection System
+# Detection
 
 ## Overview
 
-GuideDog Vision runs six detection layers simultaneously, each operating at a different frame rate and targeting a different aspect of the environment. The layers are designed to be complementary. LiDAR provides raw distance. YOLOv8n identifies common objects from the COCO dataset. BlindGuideNav identifies navigation specific features that COCO trained models miss (curbs, crosswalks, stairs, doors, railings, wet floors). ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects that the others miss. Together, these layers provide overlapping coverage so that obstacles are rarely missed entirely.
+The app runs six detection layers at once, each at a different frame rate and each targeting a different aspect of the environment. LiDAR provides raw distance. YOLOv8n recognizes 80 COCO classes. BlindGuideNav (my custom model) recognizes 55 navigation specific classes that COCO trained models miss (curbs, crosswalks, stairs, doors, railings, wet floors). ARKit mesh classifies architectural surfaces. DeepLabV3 catches large objects everything else missed. The wall inference layer fires when zone depths are uniform and no center object detection has hit recently.
 
-**Why this many layers.** Any single detection method has blind spots. LiDAR sees distance but does not know what an object is. Object detectors know what something is but cannot measure how far away it is without help. Mesh classification identifies architectural features (walls, doors) but does not detect movable objects. By stacking multiple methods that fail in different ways, the overall system has fewer scenarios where every layer simultaneously misses a hazard.
+The point of stacking these is that they fail in different ways. Any single method has blind spots. LiDAR sees distance but doesn't know what an object is. Object detectors know what something is but cannot measure how far it is without help. Mesh classification handles architectural features but misses movable objects. Layering them means very few scenarios where every layer misses the same hazard.
 
-All detection runs on the device. No camera frames are sent to a server for detection. Cloud AI is used only for on demand scene descriptions, not for continuous detection.
+All detection runs on device. No frames are sent to a server for detection. Cloud AI is used only for on demand scene descriptions.
 
-## What Makes This Pipeline Non Trivial
+## Pipeline tricks
 
-The detection pipeline includes several engineering decisions that go beyond simply running models on frames:
+A few things in this pipeline are worth calling out specifically.
 
-- **20th percentile in the center, median on the sides.** Different statistical measures for different zones because the user cares about the closest thing in front of them but the average distance on the sides.
-- **Top 25 percent and bottom 35 percent of the depth map are excluded.** Sky and floor would otherwise pull distance estimates in the wrong direction.
-- **2 frame consecutive streak filter.** Eliminates ghost detections that show up for one frame and disappear, without adding meaningful latency for real objects.
-- **`isDetecting` and `isSegmenting` ANE guards.** Prevent CoreML requests from piling up on the Apple Neural Engine, which would otherwise stall the camera pipeline.
-- **60 degree forward cone for mesh classification.** Computed from the dot product of the camera forward vector and the direction to each mesh anchor. Stops the app from announcing walls that are behind the user.
-- **DeepLabV3 deduplication against YOLO.** The segmentation layer suppresses any class that YOLO already announced. DeepLabV3 acts as a backup catcher, not a duplicate announcer.
-- **Tier gating with cross tier wait windows.** Lower priority detections (a chair) wait several seconds after a higher priority detection (a person) so the user is not interrupted while navigating around the more urgent obstacle.
-- **Approach speed detection.** A separate fast path that bypasses the normal streak filter for objects approaching at more than 0.8 m/s within 2.5 meters. This handles vehicles and cyclists where waiting two frames would be too slow.
+Different statistics for different zones. The center uses the 20th percentile of depth samples (biases toward the closest thing in the user's walking path). Left and right use the median (representative distance for the side).
 
-Each of these is described in more detail in the layer sections below.
+Top 25 percent and bottom 35 percent of the depth map are excluded. Sky and floor would otherwise pull distance estimates the wrong way.
 
-## Layer 1: LiDAR Depth Processing
+3 frame consecutive streak filter. Eliminates ghost detections that show up for one frame and disappear, without adding meaningful latency for real objects.
 
-**Rate:** Every 4 frames (~7.5 fps)
+`isDetecting` and `isSegmenting` flags prevent CoreML requests piling up on the Apple Neural Engine, which would otherwise stall the camera pipeline.
 
-**Prerequisite:** Device must have LiDAR. ARSession tracking state must be `.normal`. The engine skips depth processing during the first second or two after launch, while ARKit is still building its understanding of the room (a process called SLAM, simultaneous localization and mapping). Depth readings during this phase are unreliable because the tracking system has not yet stabilized.
+60 degree forward cone for mesh classification. Computed from the dot product of the camera forward vector and the direction to each mesh anchor. Stops the app from announcing walls behind the user. The mesh range was extended to 6 meters (it was 4) so walls get caught earlier.
+
+DeepLabV3 dedup against YOLO. If YOLO already announced a class, the segmenter suppresses it. DeepLabV3 is the backup catcher, not a duplicate announcer.
+
+Tier gating with cross tier wait windows. Lower priority detections (a chair) wait several seconds after a higher priority detection (a person) so the user is not interrupted while navigating around the more urgent one.
+
+Approach speed detection. A fast path that bypasses the streak filter for objects approaching at more than 0.8 m/s within 2.5 meters. Vehicles and cyclists need this because waiting 3 frames would be too slow.
+
+VNDetectHumanRectanglesRequest cross check. Every YOLO "person" detection has to also match an Apple human rectangle in the same area. If they don't agree, the detection is dropped. This kills the phantom person announcements from posters, mannequins, and pictures.
+
+## Layer 1: LiDAR Depth
+
+**Rate:** every 4 frames (~7.5 fps)
+
+**Prerequisite:** Device must have LiDAR. ARSession tracking state is normally `.normal`, but depth still processes during `.limited(.insufficientFeatures)` so featureless walls don't break the system. The engine skips depth processing for the first second or two after launch while SLAM is still settling.
 
 **Process:**
 
 1. Lock the depth map pixel buffer for read access.
-2. Split the depth map into three vertical columns: left third, center third, right third.
-3. Scan the middle 60% of the frame vertically (rows from 25% to 65% of the image height). The top 25% is excluded because it typically contains sky or ceiling. The bottom 35% is excluded because it contains floor readings that would pull distance values artificially low.
-4. Sample every 6th pixel in both X and Y (stride of 6) to reduce computation.
-5. Discard any reading below 0.03 meters (sensor noise floor) or above 5.0 meters (beyond useful range).
-6. For the center zone, compute the 20th percentile of all valid samples. This biases toward the closest obstacle in the center, which is what the user will walk into.
-7. For the left and right zones, compute the median. The median avoids floor and edge noise and gives a representative distance for each side.
-8. Apply exponential moving average smoothing to each zone. An exponential moving average is a way of mixing a new reading into an existing average so that recent readings count more than old ones. The mixing weight is called alpha. This system uses an alpha of 0.4, which means each new reading contributes 40 percent and the previous smoothed value retains 60 percent. The result tracks genuine distance changes within a few frames but rejects single frame noise spikes.
-9. Feed the smoothed values into the RiskSolver, which uses hysteresis (different thresholds for entering and leaving each risk level) to prevent flickering when distances oscillate near a boundary.
-10. Evaluate the progressive distance band system (see [Distance](Distance.md)) and fire alerts if a new band is entered.
-11. Send the smoothed distances to the JavaScript layer via `__onLiDARDepth` and to the haptic and spatial audio controllers.
+2. Split into three vertical columns: left, center, right thirds.
+3. Scan the middle 60 percent of the frame vertically (rows 25 percent to 65 percent). Top is sky or ceiling, bottom is floor.
+4. Sample every 6th pixel in both X and Y.
+5. Discard readings below 0.03 m (sensor noise floor) or above 5.0 m (beyond useful range).
+6. Center zone: 20th percentile. Biases toward the closest obstacle in the walking path.
+7. Left and right zones: median. Representative without being thrown by single bad readings.
+8. Smooth each zone with an exponential moving average at alpha 0.4. New reading counts 40 percent, previous smoothed value retains 60 percent. Tracks real changes within a few frames but rejects single frame spikes.
+9. Feed the smoothed values into the RiskSolver, which uses hysteresis to prevent flickering near a band boundary.
+10. Evaluate progressive distance bands ([Distance](Distance.md)) and fire alerts on band entry.
+11. Send distances to JavaScript via `__onLiDARDepth` and to the haptic and spatial audio controllers.
 
-## Layer 2: YOLOv8n Object Detection
+## Layer 2: YOLOv8n
 
-**Rate:** Every 20 frames (~1.5 fps)
+**Rate:** every 10 frames (~3 fps)
 
-**Model:** YOLOv8n, compiled to CoreML format (`.mlmodelc`). Runs through Apple's Vision framework using `VNCoreMLRequest`, which automatically dispatches inference to the Apple Neural Engine on supported hardware.
+**Model:** YOLOv8n compiled to CoreML (`.mlmodelc`). Runs through `VNCoreMLRequest`, which dispatches to the Apple Neural Engine on supported hardware.
 
-**Confidence Threshold:** 0.7 minimum. This value was chosen after testing showed that 0.5 produced too many false positives, particularly shadows being classified as objects and posters being classified as people. At 0.7, the model reliably identifies real objects while filtering out visual noise.
+**Confidence threshold:** 0.75 default. Class specific overrides where the class is prone to false positives: refrigerator 0.88, tv 0.90, chair 0.90, bed 0.85, dining table 0.85.
 
-**Ghost Detection Filter:** A 2-frame consecutive streak filter eliminates phantom detections. For each detected object class, the engine tracks how many consecutive frames it has appeared. Only objects that have been detected in at least 2 consecutive cycles pass through to the announcement system. Ghost detections (reflections, momentary misclassifications) typically appear for a single frame and then disappear, so this filter catches them without adding meaningful latency.
+**Ghost filter:** 3 consecutive cycles required before announcement. Phantom detections rarely survive that long. The cost is about a second of delay for a new object, which is fine for stationary obstacles. Fast moving threats bypass the filter through approach speed detection.
 
-**ANE Guard:** An `isDetecting` boolean prevents a new Vision request from being submitted while a previous one is still running. Without this guard, queued CoreML requests pile up on the Apple Neural Engine, causing a pipeline stall that freezes the camera feed.
+**ANE guard:** `isDetecting` boolean prevents a new Vision request from being submitted while a previous one is still running.
 
-**Object Processing:**
+**Person validation:** Every YOLO "person" detection runs through `VNDetectHumanRectanglesRequest` in the same frame. If Apple's human detector doesn't agree that there's a human in the same region, the detection is dropped. This eliminates the most common false positive (posters, photos, mannequins).
 
-1. Filter results to the relevant object set (tier 1, 2, and 3 classes).
-2. Determine direction (left, center, right) based on the bounding box center X coordinate. Below 0.33 is left, above 0.67 is right, and everything between is ahead.
-3. Estimate distance using size-based triangulation (see DISTANCE.md).
-4. Sort by tier (tier 1 first) then by distance (closest first).
-5. Track objects across frames for approach speed detection.
-6. Select the single most important object to announce (see Smart Announcements below).
+**Per detection processing:**
+
+1. Filter to the relevant object set (tier 1, 2, 3 classes).
+2. Determine direction (left, center, right) from the bounding box center X. Below 0.33 is left, above 0.67 is right, between is ahead.
+3. Estimate distance with size based triangulation ([Distance](Distance.md)).
+4. Sort by tier first, then by distance.
+5. Track across frames for approach speed detection.
+6. Pick one object to announce.
 
 ## Layer 3: ARKit Mesh Classification
 
-**Rate:** Every 15 frames (~2 fps)
+**Rate:** every 15 frames (~2 fps)
 
-**Prerequisite:** Device must have LiDAR and support `sceneReconstruction(.meshWithClassification)`.
+**Prerequisite:** Device has LiDAR and supports `sceneReconstruction(.meshWithClassification)`.
 
-**Process:**
-
-The MeshClassifier reads all `ARMeshAnchor` objects from the current AR frame. For each anchor:
-
-1. Compute the distance and direction from the camera to the anchor position.
-2. Filter to a forward-facing 60-degree cone. The dot product of the camera forward vector and the direction to the anchor must be greater than 0.5. This prevents the app from announcing walls behind the user.
-3. Determine lateral direction using the dot product with the camera right vector. Below -0.3 is left, above 0.3 is right, and between is center.
-4. Sample up to 200 faces from the mesh geometry to find the dominant surface classification.
-5. Classify the anchor as one of: wall, door, window, seat, table, floor, ceiling, or none.
-
-**Deduplication:** After collecting all hits, the classifier deduplicates by keeping only the closest hit for each unique (classification, direction) pair. This prevents the app from announcing "wall ahead, wall ahead, wall ahead" when multiple mesh anchors on the same wall are all visible.
-
-**Announcement Rules:**
-
-- Walls are announced at caution distance with distance in feet, and at danger distance with "Wall nearby."
-- Doors are always announced (they represent navigation opportunities).
-- Windows are announced only when closer than 1.0 meter ("Glass ahead"), because glass doors and glass walls are collision hazards.
-- Seats and tables are announced at caution distance.
-
-## Layer 4: DeepLabV3 Semantic Segmentation
-
-**Rate:** Every 60 frames (~0.5 fps)
-
-**Model:** DeepLabV3, compiled to CoreML format. This model segments the entire camera frame into 21 PASCAL VOC classes: background, aeroplane, bicycle, bird, boat, bottle, bus, car, cat, chair, cow, dining table, dog, horse, motorbike, person, potted plant, sheep, sofa, train, and TV monitor.
+**Range:** 6 meters (extended from the previous 4 m so walls get caught earlier).
 
 **Process:**
 
-1. Run the model through Vision framework with `VNCoreMLRequest`.
-2. Parse the output segmentation map. The output may be 3D or 4D depending on CoreML's handling of the batch dimension.
-3. Sample every 8th pixel in both X and Y for speed.
-4. Count class votes for left, center, and right zones.
+MeshClassifier reads all `ARMeshAnchor` objects from the current AR frame. For each anchor:
+
+1. Compute distance and direction from the camera to the anchor position.
+2. Filter to a forward facing 60 degree cone (dot product of camera forward vector with anchor direction > 0.5).
+3. Determine lateral direction using the dot product with the camera right vector. Below -0.3 is left, above 0.3 is right, between is center.
+4. Sample up to 200 mesh faces to find the dominant surface classification.
+5. Classify as one of: wall, door, window, seat, table, floor, ceiling, none.
+
+A `closestWall` accessor surfaces the nearest wall regardless of direction zone, which powers the "Wall nearby" announcements.
+
+**Dedup:** Keep only the closest hit for each unique (classification, direction) pair. Stops the app from saying "wall ahead, wall ahead, wall ahead" when multiple mesh anchors on the same wall are all in view.
+
+**Announcement rules:**
+
+- Walls at caution distance with feet, danger distance with "Wall nearby."
+- Doors always (navigation opportunity).
+- Windows only when closer than 1.0 m ("Glass ahead"), because glass doors and walls are collision hazards.
+- Seats and tables at caution distance.
+
+## Layer 4: DeepLabV3 Segmentation
+
+**Rate:** every 60 frames (~0.5 fps)
+
+**Model:** DeepLabV3 compiled to CoreML. Segments the frame into 21 PASCAL VOC classes (background, person, car, chair, dining table, sofa, TV, etc.).
+
+**Process:**
+
+1. Run through Vision framework with `VNCoreMLRequest`.
+2. Parse the output segmentation map.
+3. Sample every 8th pixel.
+4. Count class votes for left, center, right zones.
 5. Compute frame coverage for each detected class.
 
-**Announcement Filter:** Only objects with more than 15% frame coverage are announced. This threshold ensures that only large, scene-dominating objects are reported. Small slivers of a class at the edge of the frame are ignored.
+**Filter:** Only objects covering more than 15 percent of the frame are announced. Small slivers at the edges are ignored.
 
-**YOLO Deduplication:** Before announcing, the segmenter checks whether YOLOv8n has already detected the same object class. If YOLO already announced "car ahead," DeepLabV3 will not repeat it. DeepLabV3 serves as a backup for objects that YOLO missed, not a duplicate announcement source.
+**YOLO dedup:** If YOLO already announced the same class, DeepLabV3 stays silent. It's the backup catcher.
 
-**Announcement Priority:** One announcement per segmentation pass, spoken at detection priority (urgency 2.0).
+**Priority:** One announcement per pass, at detection priority (urgency 2.0).
 
-## Layer 5: BlindGuideNav Custom Model
+## Layer 5: BlindGuideNav
 
-**Rate:** Every 20 frames (~1.5 fps), interleaved with YOLOv8n
+**Rate:** every 20 frames (~1.5 fps), interleaved with YOLO
 
-**Model:** A custom CoreML model trained on 55 navigation specific classes. These classes are focused on objects and surfaces commonly encountered during pedestrian navigation, including curb ramps, crosswalks, traffic signals, stairs (with separate up and down classes), escalators, doors (open and closed), railings, wet floors, and overhead obstacles. See [BlindGuideNav](../CustomModel/BlindGuideNav.md) for the full class list and the architecture details.
+**Model:** custom 55 class CoreML model. Trained on navigation specific classes including curb ramps, crosswalks, traffic signals, stairs (up and down as separate classes), escalators, doors (open and closed), railings, wet floors, and overhead obstacles. Full class list and training notes in [BlindGuideNav](../CustomModel/BlindGuideNav.md).
 
-**Why this layer exists.** YOLOv8n is excellent at people, vehicles, and indoor furniture, but it does not know what a curb ramp is. The COCO dataset it was trained on does not contain navigation specific labels. BlindGuideNav fills this gap by providing detections for the features that matter most to a blind walker. Both detectors run together and their results merge into a single deduplicated list before the announcement system picks which object to speak.
+**Why it exists:** YOLOv8n is great at people, vehicles, and indoor furniture, but the COCO dataset it was trained on doesn't have navigation labels. BlindGuideNav fills that. Both detectors run together and their results merge into one deduplicated list before announcement picks what to speak.
 
 **Process:**
 
-1. Run the model through Vision framework with `VNCoreMLRequest`, the same way YOLOv8n is dispatched.
-2. Apply a confidence threshold (0.5 to 0.7 depending on class) and non maximum suppression (a deduplication step that merges overlapping boxes for the same object, described in [BlindGuideNav](../CustomModel/BlindGuideNav.md)).
-3. Translate detections into the same internal object format used by YOLOv8n results.
-4. Merge with the YOLOv8n detection list. Where both detectors find the same object in the same location, the higher confidence detection wins.
-5. Pass the merged list to the smart announcement system described below.
+1. Run through Vision with `VNCoreMLRequest`, same as YOLO.
+2. Apply per class confidence thresholds (0.5 to 0.7) and non maximum suppression.
+3. Translate detections into the same internal object format YOLO uses.
+4. Merge with the YOLO list. Where both detectors find the same object in the same place, the higher confidence one wins.
+5. Pass the merged list to the announcement system.
 
-**Why merge instead of dedicate to specific cases.** Running the two detectors as a unified pipeline keeps the announcement logic simple. The downstream tier system (described below) does not need to know which model produced a given detection. It only needs the class label, position, and distance. Whether a "curb" detection came from BlindGuideNav and a "person" detection came from YOLOv8n is invisible to the rest of the engine.
+The downstream tier system doesn't care which model produced a given detection. It only needs the class label, position, and distance.
 
-## Smart Announcement System
+## Wall inference
 
-All detection results feed into a unified announcement system that enforces several rules to prevent speech overload.
+The hardest indoor failure mode is a blank painted wall. ARKit's mesh classifier needs visual features to track. A flat wall in good lighting has very few, so the tracking state drops to `.limited(.insufficientFeatures)` and the mesh classifier stops returning useful data.
 
-### Tier Priority
+The wall inference layer handles this. When the left, center, and right depth zones all read similar distances (depth map is uniform) AND no object detection has hit in the center recently, the band escalation speech says "Wall ahead" instead of "Heads up" or "Something ahead."
 
-Objects are grouped into three tiers by navigation importance:
+The `announceWallHit()` path has three tiers by distance:
+- Under 3 m: "Wall ahead"
+- Under 2 m: "Wall, X feet"
+- Under 1 m: "Wall nearby"
 
-- **Tier 1 (highest priority):** person, car, truck, bus, motorcycle, bicycle. These are moving hazards that require immediate attention.
-- **Tier 2:** chair, bench, dining table, couch. These are static obstacles commonly encountered indoors.
-- **Tier 3:** fire hydrant, stop sign, parking meter, refrigerator, potted plant, bed, backpack, laptop, TV. These are useful context objects but less urgent.
+Depth processing now keeps running during `.limited(.insufficientFeatures)`, which is the change that lets this inference actually fire when ARKit's tracking degrades.
 
-### One Announcement Per Cycle
+## Announcement system
 
-The engine selects exactly one object to announce per detection cycle. This is a deliberate design choice. When multiple objects are detected simultaneously and each generates a speech utterance, the utterances queue up in the speech synthesizer. By the time the second or third utterance plays, the user may have walked past those objects, making the announcements stale and confusing.
+All detections feed into a unified system that enforces several rules to prevent speech overload.
 
-Instead, the engine picks the single highest-priority, closest object and announces only that one. On the next detection cycle (about 0.67 seconds later), it can pick a different object if the situation has changed.
+### Tiers
 
-### Tier Gating
+- **Tier 1 (highest):** person, car, truck, bus, motorcycle, bicycle. Moving hazards, immediate attention.
+- **Tier 2:** chair, bench, dining table, couch. Static indoor obstacles.
+- **Tier 3:** fire hydrant, stop sign, parking meter, refrigerator, potted plant, bed, backpack, laptop, TV. Context objects, less urgent.
 
-Lower-tier objects are suppressed when a tier 1 object was announced recently. Tier 2 objects wait 3 seconds after the last tier 1 announcement. Tier 3 objects wait 5 seconds. This prevents a chair announcement from interrupting while the user is navigating around a person.
+### One announcement per cycle
 
-### Repetition Cooldowns
+The engine picks exactly one object to announce per cycle. The reason is staleness. If you queue three announcements, by the time the third one plays the user has walked past those objects. Picking one keeps every announcement current. The next cycle (about 0.67 seconds later) can pick a different object.
 
-The same object in the same direction is not re-announced unless the distance has changed significantly or enough time has passed. For tier 1 objects, re-announcement requires either a 0.3-meter distance change within 1.5 seconds, or 4 seconds of elapsed time. For lower tiers, the thresholds are 1.0-meter distance change within 4 seconds, or 15 seconds of elapsed time.
+### Tier gating
 
-### Approach Speed Detection
+Lower tier objects are suppressed when a tier 1 object was announced recently. Tier 2 waits 3 seconds after the last tier 1 announcement. Tier 3 waits 5 seconds. Stops a chair announcement from interrupting while you're navigating around a person.
 
-The engine tracks the position and distance of each detected object across frames. If a tier 1 object is approaching at more than 0.8 meters per second and is within 2.5 meters, the engine immediately announces "[Object] approaching fast" at danger priority. This handles the scenario of a car or cyclist moving toward the user.
+### Repetition cooldowns
+
+The same object in the same direction does not re announce unless distance has changed significantly or enough time has passed. For tier 1: 0.3 m distance change within 1.5 seconds, or 4 seconds elapsed. For lower tiers: 1.0 m distance change within 4 seconds, or 15 seconds elapsed.
+
+### Approach speed
+
+The engine tracks each detected object's position and distance across frames. If a tier 1 object is approaching at more than 0.8 m/s and is within 2.5 m, the engine immediately announces "[Object] approaching fast" at danger priority. This handles cars and cyclists where waiting for the streak filter would be too slow.

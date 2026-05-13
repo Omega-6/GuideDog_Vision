@@ -1,57 +1,71 @@
-# Application Overview
+# App Overview
 
-## The Problem
+## The problem this app addresses
 
-Roughly **2.2 billion people** worldwide live with some form of vision impairment, including **43.3 million** who are completely blind and **295.1 million** with moderate to severe visual impairment. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people actually have one. The remaining 98 percent navigate daily life without one because guide dogs cost **$40,000 to $60,000** to train, take **two years** to produce, and have wait lists that stretch from **one to three years**. Even after placement, only about a third of dogs entering a training program graduate.
+About **2.2 billion people** worldwide live with vision impairment. **43.3 million** are fully blind. **295.1 million** have moderate to severe vision loss. The most well known mobility aid is the guide dog, but only about **2 percent** of blind people have one. The reasons are stacked: a single dog costs **$40,000 to $60,000** to train, training takes **two years**, only **one in three** dogs that enter a program actually graduate, and waiting lists run **one to three years**.
 
-GuideDog Vision is built to help close that gap. It does not replace a guide dog. A trained animal can do things software cannot. What software can do is provide real time obstacle awareness, distance sensing, and scene understanding on hardware that millions of blind people already own. See the [README](../../README.md) for the full problem statement and source citations.
+I built this app because every phone in someone's pocket has cameras and accelerometers and a Neural Engine. None of that hardware is being used to help blind people navigate. It should be.
 
-## Purpose
+This app is not a guide dog and never will be. A dog makes its own safety calls, and a dog is a companion. What software can do is watch the scene, identify obstacles, and announce them. Read the [README](../../README.md) for the full problem writeup with citations.
 
-GuideDog Vision is a native iOS application designed to provide real time navigation assistance to blind and visually impaired users. The app transforms an iPhone into an intelligent obstacle detection and scene understanding tool, using a combination of on device sensors, machine learning models, and cloud AI to describe the user's surroundings through speech, haptic feedback, and spatial audio.
+## What the app does
 
-The core philosophy is proactive protection. The user does not need to interact with the app to receive safety alerts. GuideDog continuously monitors the environment and announces obstacles, walls, doors, vehicles, and other hazards as the user walks. When the user wants more detail, gestures and voice commands provide on-demand scene descriptions.
+GuideDog Vision turns an iPhone into a navigation assistant. The phone runs continuously while you walk. It announces obstacles, walls, doors, vehicles, and other hazards through speech, haptics, and spatial audio beeps. The user does not have to do anything to receive these alerts. The point is proactive protection. If you want more detail about what's around you, gestures and voice commands trigger a cloud AI scene description.
 
-## Target Users
+## Who it's for
 
-The primary audience is people who are blind or have low vision. The interface is designed for eyes-free operation. All critical information is delivered through speech and haptics. The visual UI exists primarily for sighted helpers and debugging, not as the primary interaction surface.
+Primary users are blind and low vision people. The interface is designed for eyes free operation. Everything important reaches you through speech and haptics. The visual UI is there for sighted helpers and for debugging.
 
-Secondary users include orientation and mobility instructors who may use the camera preview and visual indicators during training sessions.
+Secondary users are orientation and mobility instructors who might use the camera preview during training.
 
-## Supported Devices
+## What devices work
 
-GuideDog Vision requires an iPhone running iOS 15 or later. The app runs on all iPhones that support ARKit world tracking, but the experience varies significantly based on hardware.
+Any iPhone running iOS 15 or later with ARKit world tracking support. The experience depends on the hardware.
 
-**LiDAR-equipped iPhones (recommended):** iPhone 12 Pro and later Pro models include a LiDAR scanner. These devices provide the full experience: centimeter-accurate depth readings at 30 frames per second, ARKit mesh classification for walls and doors, and the most reliable obstacle detection. The app performs best on these devices.
+**LiDAR equipped iPhones (recommended).** iPhone 12 Pro and later Pro models have a LiDAR scanner. These give you the full experience: centimeter accurate depth at 30 fps, ARKit mesh classification for walls and doors, and the most reliable distance information.
 
-**Non-LiDAR iPhones:** iPhones without LiDAR still run the app. Object detection (YOLOv8n), scene segmentation (DeepLabV3), and cloud AI all function normally. For depth estimation, the app falls back to Depth-Anything, a neural network that estimates depth from monocular camera images. This fallback is less precise than LiDAR but still provides useful distance warnings.
+**Non Pro iPhones.** The app still runs. Object detection, segmentation, and cloud AI all work normally. For depth, the app falls back to Depth-Anything, a neural depth estimator I converted to CoreML. It's less precise than LiDAR but gives useful distance warnings. On these phones, speech drops the "feet" suffix from announcements ("Person right" instead of "Person, 6 feet") because the distances are estimates rather than direct measurements.
 
-## Feature List
+## What you get
 
-### On-Device Detection
+### On device detection
 
-- **LiDAR Depth Processing.** Splits the depth map into left, center, and right zones. Reports distances with exponential moving average smoothing. Progressive distance bands trigger speech, haptics, and audio alerts as the user approaches obstacles.
+LiDAR splits the depth map into left, center, and right zones and reports smoothed distances. Progressive bands trigger speech, haptics, and audio alerts as you get closer to something.
 
-- **YOLOv8n Object Detection.** Runs a YOLOv8n model through Apple's Vision framework and CoreML. Identifies 80 COCO object classes including people, vehicles, furniture, and common outdoor objects. Hardware-accelerated on the Apple Neural Engine.
+YOLOv8n runs through Apple's Vision framework on the Neural Engine. It recognizes 80 COCO classes (people, cars, chairs, etc.) at about 3 fps. People detections are cross checked against Apple's VNDetectHumanRectanglesRequest, so YOLO calling something a "person" only sticks if Apple's human detector also sees a human in the same place. This kills almost all of the phantom "person" announcements from photos, posters, and mannequins.
 
-- **ARKit Mesh Classification.** On LiDAR devices, ARKit reconstructs a 3D mesh of the environment and classifies surfaces as walls, doors, windows, seats, or tables. The app filters this mesh to a forward-facing 60-degree cone and announces relevant surfaces with distance and direction.
+ARKit mesh classification reconstructs a 3D mesh of the room and labels surfaces as walls, doors, windows, seats, or tables. The mesh check ranges out to 6 meters and filters to a forward facing 60 degree cone, so walls behind you don't get announced.
 
-- **DeepLabV3 Semantic Segmentation.** A secondary detection layer that segments the entire camera frame into 21 PASCAL VOC classes. Announces large objects (greater than 15% frame coverage) that YOLOv8n missed, providing complementary coverage.
+DeepLabV3 catches large objects YOLO missed by segmenting the whole frame into 21 PASCAL VOC classes.
 
-- **BlindGuideNav Custom Model.** A custom CoreML model trained on 55 navigation-specific classes. The model is loaded into the project and available for activation. It is designed to run alongside YOLOv8n for expanded detection coverage in future updates.
+BlindGuideNav is my custom 55 class model trained on navigation specific features (curbs, crosswalks, stairs, doors, railings, wet floors, etc.). It runs alongside YOLO and their detections merge before the announcement system picks what to speak.
+
+### Wall inference for featureless surfaces
+
+The hardest failure mode I ran into was a blank white wall with no edges. ARKit's mesh classifier needs visual features to anchor, so it sometimes loses tracking with `.limited(.insufficientFeatures)` when the camera is pointed at a flat painted wall. The fix: when the left, center, and right depth zones all read similar distances and no object detection has fired in the center recently, the app says "Wall ahead" instead of the generic "Heads up" or "Something ahead." This backstops the mesh classifier exactly when it would otherwise fail. Depth processing now keeps running during `.limited(.insufficientFeatures)` so the inference can fire.
+
+The wall announcer also has three distance tiers: "Wall ahead" under 3 meters, "Wall, X feet" under 2 meters, "Wall nearby" under 1 meter.
 
 ### Cloud AI
 
-- **Dual-provider scene description.** When the user requests a scan (or when the scene changes), the app sends a compressed camera frame to a Cloudflare Worker that races Claude Haiku 4.5 against GPT-4.1-mini. Whichever responds first is spoken aloud. The prompt is safety-focused with a 15-word maximum, prioritizing stairs and immediate hazards.
+When you trigger a scan, the app sends a compressed camera frame to a Cloudflare Worker that races Claude Haiku 4.5 against GPT-4.1-mini. Whichever responds first gets spoken aloud. The prompt is safety focused with a 15 word maximum, prioritizing stairs and immediate hazards.
 
 ### Interaction
 
-- **Voice Commands.** The user holds the screen to activate speech recognition (SFSpeechRecognizer). Recognized commands include "what's around," "is it safe," "left," "right," "scan," "stop," "resume," and "help." Known commands execute immediately from partial recognition results for minimal latency.
+Voice commands are activated by holding the screen. Recognized commands include "what's around," "is it safe," "left," "right," "scan," "stop," "resume," and "help." Known commands fire from partial recognition for minimal latency.
 
-- **Haptic Feedback.** UIImpactFeedbackGenerator provides haptic pulses that increase in frequency as the user approaches an obstacle. Caution-level obstacles pulse every 0.5 seconds. Danger-level obstacles pulse every 0.1 seconds.
+Haptics pulse faster as you get closer. Caution pulses every 0.5 seconds. Danger pulses every 0.1 seconds.
 
-- **Spatial Audio.** An AVAudioEngine generates directional beeps panned to the left or right stereo channel, indicating which side a danger-level obstacle is on. Beeps are limited to danger-level threats only. The spatial audio system pauses automatically during speech to prevent cognitive overload.
+Spatial audio plays a short beep panned to the side an obstacle is on. Beeps fire only at danger level. The spatial channel pauses when speech is playing so you can hear each clearly.
 
-### Depth-Anything Fallback
+### Distance bands with hysteresis
 
-On iPhones without LiDAR, the app loads a Depth-Anything model to estimate per-pixel depth from the monocular camera feed. This provides approximate distance information for the same progressive alert system that LiDAR drives on Pro models. The estimates are less precise but still support the core safety workflow of warning the user before they walk into obstacles.
+The progressive band system fires once when you enter each band. Enter danger at 1.0 meter, exit at 1.1. Enter caution at 2.0, exit at 2.2. The hysteresis stops LiDAR jitter from flipping the band back and forth at the boundary. More detail in [Distance](Distance.md).
+
+### Depth-Anything fallback
+
+On iPhones without LiDAR, the app loads a Depth-Anything CoreML model I converted from the HuggingFace export. It runs in about 9 ms on iPhone 13 and produces a relative depth map. The model is preloaded on app launch so the engine starts instantly when the user taps START. The same progressive band system uses these estimates, just labeled as approximate so speech drops the foot count.
+
+### Startup speech
+
+When you tap START, the app says "Loading. One moment." right away. Once the first real depth callback arrives, it says "GuideDog active." This is so blind users know whether the engine is initializing or actually running.

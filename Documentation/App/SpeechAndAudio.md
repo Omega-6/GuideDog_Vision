@@ -1,120 +1,130 @@
 # Speech, Spatial Audio, and Haptics
 
-## What Makes This System Non Trivial
+## What makes this tricky
 
-GuideDog Vision uses three audio channels (speech, spatial beeps, vibration) plus a fourth via the haptic engine. They have to coexist without interrupting each other or overwhelming the user. Several design decisions go beyond just calling `AVSpeechSynthesizer.speak()`:
+Three audio channels (speech, spatial beeps, vibration) plus a fourth through the haptic engine. They have to coexist without interrupting each other or overwhelming the user.
 
-- **Five priority tiers with explicit cooldowns.** Lower priority speech never interrupts higher priority speech. Each tier has its own cooldown so the same alert does not repeat too quickly.
-- **`stopSpeaking(at: .word)` instead of `.immediate`.** When a higher priority alert needs to interrupt, the synthesizer stops at the next word boundary instead of cutting mid syllable. The result sounds less jarring and is easier to parse.
-- **NSLock thread safety.** All synthesis state (current priority, last spoken text, last spoken time) is protected by an NSLock so the detection queue and main queue can both touch it safely.
-- **1 second SpatialAudioController delay.** AVAudioEngine and AVSpeechSynthesizer conflict if both initialize at the same time. The synthesizer can lose its audio output entirely. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance.
-- **Speech pause before spatial beeps.** A blind user processes audio sequentially. Playing a beep over speech makes both harder to parse. The spatial audio controller checks `speechController.isSpeaking` and skips the beep if speech is currently playing.
-- **AVAudioEngineConfigurationChange listener.** When the audio route changes (headphones connect or disconnect), the engine gets marked dirty and rebuilt on the next beep. Without this the spatial audio would silently break after every route change.
-- **Bluetooth aware speaker fallback.** The audio session is configured for `.playAndRecord`, which by default routes output to the earpiece (too quiet for navigation). The app overrides the route to the speaker only when no Bluetooth audio device is connected, so AirPods routing is never disrupted.
-- **Pre initialized haptic generators.** UIImpactFeedbackGenerator instances are created at startup, not at alert time, to avoid the latency of allocating the haptic engine when an alert needs to fire.
+Five priority tiers with explicit cooldowns. Lower priority speech never interrupts higher priority speech. Each tier has its own cooldown so the same alert doesn't repeat too quickly.
+
+`stopSpeaking(at: .word)` instead of `.immediate`. When a higher priority alert needs to interrupt, the synthesizer stops at the next word boundary instead of mid syllable. Sounds less jarring and is easier to parse.
+
+NSLock thread safety. All synthesis state (current priority, last spoken text, last spoken time) is protected by an NSLock so the detection queue and main queue can both touch it safely.
+
+1 second SpatialAudioController delay. AVAudioEngine and AVSpeechSynthesizer conflict if both initialize at the same time. The synthesizer can lose its audio output entirely. The fix is to delay AVAudioEngine creation until after the synthesizer has spoken its first utterance.
+
+Speech pause before spatial beeps. A blind user processes audio sequentially. Playing a beep over speech makes both harder to parse. The spatial audio controller checks `speechController.isSpeaking` and skips the beep if speech is currently playing.
+
+AVAudioEngineConfigurationChange listener. When the audio route changes (headphones connect or disconnect), the engine gets marked dirty and rebuilt on the next beep. Without this, spatial audio would silently break after every route change.
+
+Bluetooth aware speaker fallback. The audio session is configured for `.playAndRecord`, which by default routes output to the earpiece (too quiet for navigation). The app overrides to the speaker only when no Bluetooth audio device is connected, so AirPods routing is never disrupted.
+
+Pre initialized haptic generators. `UIImpactFeedbackGenerator` instances are created at startup, not at alert time, to avoid the latency of allocating the haptic engine when an alert needs to fire.
 
 ## SpeechController
 
-The SpeechController manages all spoken output through AVSpeechSynthesizer. It implements a priority system that prevents low-importance announcements from interrupting urgent safety alerts.
+Manages all spoken output through `AVSpeechSynthesizer`. Priority system prevents low importance announcements from interrupting urgent safety alerts.
 
-### Priority Tiers
+### Priority tiers
 
-The controller defines five priority levels. Each maps to a range of urgency values used by the rest of the engine:
+Five levels. Each maps to a range of urgency values used by the rest of the engine:
 
-| Priority   | Urgency Range | Cooldown | Use Cases |
-|-----------|--------------|----------|-----------|
-| User      | 7.0 and above | 0.5s    | Voice command responses, manual scan results, help text, user-initiated speech from JS |
-| Danger    | 5.0 to 6.0   | 2.0s    | Critical distance alerts ("Stop!"), wall nearby, fast-approaching objects |
-| Caution   | 3.0 to 4.0   | 4.0s    | Object detections at moderate distance, distance band entries |
-| Detection | 1.0 to 2.0   | 6.0s    | DeepLabV3 segmentation results, low-confidence objects |
-| Info      | 0.0 to 0.5   | 10.0s   | Background cloud AI scene descriptions, status messages |
+| Priority | Urgency Range | Cooldown | Use cases |
+|---|---|---|---|
+| User | 7.0+ | 0.5 s | Voice command responses, manual scan results, help text, JS speech |
+| Danger | 5.0 to 6.0 | 2.0 s | Critical distance alerts ("Stop!"), wall nearby, fast approaching objects |
+| Caution | 3.0 to 4.0 | 4.0 s | Object detections at moderate distance, distance band entries |
+| Detection | 1.0 to 2.0 | 6.0 s | DeepLabV3 segmentation results, low confidence objects |
+| Info | 0.0 to 0.5 | 10.0 s | Background cloud AI descriptions, status messages |
 
-### Interruption Rules
+### Interruption rules
 
-- A lower-priority utterance never interrupts a currently-speaking higher-priority utterance. If a detection-level announcement is queued while a danger-level alert is playing, the detection announcement is silently dropped.
-- Danger and user priorities always stop the currently playing speech using `stopSpeaking(at: .word)`. The `.word` boundary (rather than `.immediate`) prevents the synthesizer from cutting off mid-syllable, which sounds jarring and can be difficult for the user to parse.
-- Each priority tier has its own cooldown. The same text at the same priority will not repeat within the cooldown window. This prevents rapid-fire repetition of "Stop!" when the user is standing still next to an obstacle.
-- The info tier has a global cooldown. Even different text at info priority will not play if any info-priority speech played within the last 10 seconds. This keeps background cloud AI descriptions from flooding the audio channel.
+A lower priority utterance never interrupts a higher priority one. If a detection level announcement is queued while danger is playing, the detection one is silently dropped.
 
-### Voice Characteristics
+Danger and user priorities stop the currently playing speech using `stopSpeaking(at: .word)`. The `.word` boundary (not `.immediate`) keeps the synthesizer from cutting off mid syllable.
 
-- Danger-priority speech plays at rate 0.58 with pitch multiplier 0.85. The slightly faster rate and lower pitch create a sense of urgency distinct from normal announcements.
+Each priority has its own cooldown. Same text at the same priority will not repeat within the cooldown window. Stops rapid fire repetition of "Stop!" when the user is standing next to an obstacle.
+
+The info tier has a global cooldown. Even different info text won't play if any info speech played in the last 10 seconds. Keeps background cloud AI descriptions from flooding the audio channel.
+
+### Voice characteristics
+
+- Danger speech plays at rate 0.58 with pitch multiplier 0.85. Slightly faster, slightly lower pitch creates urgency.
 - All other speech plays at rate 0.52 with default pitch.
 - Volume is always 1.0.
-- The voice is set to `en-US` via `AVSpeechSynthesisVoice(language: "en-US")`.
+- Voice is `en-US` via `AVSpeechSynthesisVoice(language: "en-US")`.
 
-### Thread Safety
+### Thread safety
 
-The SpeechController uses an NSLock to protect its internal state. All synthesis calls are dispatched to the main thread because AVSpeechSynthesizer requires main-thread access. The lock protects the `lastText`, `lastTime`, and `currentPriority` properties from concurrent reads and writes across the detection queue and main queue.
+The SpeechController uses an `NSLock` to protect internal state. All synthesis calls dispatch to the main thread because `AVSpeechSynthesizer` requires it. The lock protects `lastText`, `lastTime`, and `currentPriority` from concurrent reads and writes across the detection queue and main queue.
 
-The controller conforms to `AVSpeechSynthesizerDelegate` and resets `currentPriority` to `.info` when an utterance finishes. This ensures that the priority lock is released after each utterance completes, allowing lower-priority announcements to play again.
+The controller conforms to `AVSpeechSynthesizerDelegate` and resets `currentPriority` to `.info` when an utterance finishes. The priority lock releases after each utterance so lower priority announcements can play again.
 
 ## SpatialAudioController
 
-The SpatialAudioController generates directional beeps that indicate which side a danger-level obstacle is on. It uses AVAudioEngine to synthesize and pan sine wave tones in real time.
+Generates directional beeps that indicate which side a danger level obstacle is on. Uses `AVAudioEngine` to synthesize and pan sine wave tones in real time.
 
-### Beep Characteristics
+### Beep characteristics
 
-- Frequency: 880 Hz (A5, a clear and attention-getting pitch).
-- Duration: 0.08 seconds (short enough to be a beep, not a tone).
-- Maximum rate: 1 beep per second. A `lastBeepTime` timestamp enforces this cooldown.
+- Frequency: 880 Hz (A5, clear and attention getting)
+- Duration: 0.08 seconds
+- Max rate: 1 beep per second, enforced by `lastBeepTime`
 
-### Stereo Panning
+### Stereo panning
 
-The beep is panned based on which zone has the highest risk level:
+Beep is panned by which zone has the highest risk:
 
-- Left zone danger: pan = -1.0 (full left channel).
-- Center zone danger: pan = 0.0 (centered).
-- Right zone danger: pan = +1.0 (full right channel).
+- Left zone danger: pan = -1.0
+- Center zone danger: pan = 0.0
+- Right zone danger: pan = +1.0
 
-Panning is implemented by scaling the left and right channel amplitudes of a stereo PCM buffer. The formula is: left volume = base volume * min(1.0, 1.0 - pan), right volume = base volume * min(1.0, 1.0 + pan).
+Implemented by scaling left and right channel amplitudes of a stereo PCM buffer: `left = base * min(1.0, 1.0 - pan)`, `right = base * min(1.0, 1.0 + pan)`.
 
-### Danger-Only Design
+### Danger only
 
-The spatial audio system only fires beeps for danger-level risk. Caution-level beeps were disabled during testing because they fired constantly in indoor environments. Any room with a wall within 2 meters on at least one side (which is nearly every room) would trigger continuous caution beeps, making the feature useless. Restricting beeps to danger-level threats means they only sound when the user is about to collide with something.
+Spatial audio only fires for danger level risk. Caution beeps were disabled during testing because they fired constantly indoors. Any room with a wall within 2 m on one side (basically every room) would trigger continuous beeps. Restricting to danger only means they only sound when the user is about to collide with something.
 
-### Speech Pause
+### Speech pause
 
-Before playing a beep, the controller checks `speechController.isSpeaking`. If speech is currently playing, the beep is skipped. Blind users must process audio information sequentially. Overlapping beeps and speech creates cognitive overload and makes both harder to understand.
+Before playing a beep, the controller checks `speechController.isSpeaking`. If speech is currently playing, the beep is skipped. Blind users process audio sequentially. Overlapping beeps and speech creates cognitive overload.
 
-### Engine Management
+### Engine management
 
-The SpatialAudioController creates its own AVAudioEngine instance. The engine is started lazily on the first beep request (`ensureEngine()`). The controller listens for `AVAudioEngineConfigurationChange` notifications (triggered by audio route changes such as connecting or disconnecting headphones) and marks the engine as dirty so it will be rebuilt on the next beep. It also listens for `AVAudioSession.interruptionNotification` to handle phone calls and other audio interruptions.
+The controller creates its own `AVAudioEngine`. The engine is started lazily on first beep (`ensureEngine()`). The controller listens for `AVAudioEngineConfigurationChange` (triggered by route changes like connecting or disconnecting headphones) and marks the engine dirty so it rebuilds on the next beep. It also listens for `AVAudioSession.interruptionNotification` for phone calls.
 
-The controller is created 1.0 second after engine start. This delay prevents a conflict between AVAudioEngine and AVSpeechSynthesizer that occurs when both initialize at the same time. The conflict manifests as the speech synthesizer producing no audio output, which is a critical failure for a blind user.
+The controller is created 1.0 second after engine start. This delay prevents the AVAudioEngine vs AVSpeechSynthesizer conflict that occurs when both initialize simultaneously. The conflict manifests as the speech synthesizer producing no audio output, which is a critical failure for a blind user.
 
 ## HapticController
 
-The HapticController provides tactile feedback through the iPhone's Taptic Engine using UIImpactFeedbackGenerator.
+Tactile feedback through the iPhone's Taptic Engine using `UIImpactFeedbackGenerator`.
 
-### Feedback Patterns
+### Patterns
 
-| Risk Level | Generator Style | Pulse Interval |
-|-----------|----------------|----------------|
-| Safe      | None           | No pulses      |
-| Caution   | Light          | 0.5 seconds    |
-| Danger    | Heavy          | 0.1 seconds    |
+| Risk level | Generator | Pulse interval |
+|---|---|---|
+| Safe | none | no pulses |
+| Caution | light | 0.5 s |
+| Danger | heavy | 0.1 s |
 
-The controller uses two pre-initialized feedback generators (light and heavy) to avoid the latency of creating a generator at alert time. When the risk level changes, the controller invalidates the existing pulse timer and creates a new repeating timer at the appropriate interval.
+Two pre initialized feedback generators (light and heavy) avoid the latency of creating a generator at alert time. When the risk level changes, the existing pulse timer is invalidated and a new repeating timer fires at the appropriate interval.
 
-The controller only updates when the risk level changes. If the risk level remains at caution across multiple depth frames, the existing 0.5-second pulse timer continues running without interruption.
+The controller only updates on risk level change. If the risk stays at caution across multiple depth frames, the existing 0.5 s timer keeps running without interruption.
 
-### Purpose
+### Why haptics
 
-Haptic feedback provides an immediate, non-auditory signal of danger. A blind user wearing headphones receives haptic pulses even if audio is momentarily unavailable. The increasing pulse rate (from 0.5s at caution to 0.1s at danger) creates an intuitive sense of escalating urgency without requiring any audio output.
+Haptic feedback provides an immediate non auditory signal of danger. A blind user wearing headphones still feels haptic pulses if audio is momentarily unavailable. The increasing pulse rate (0.5 s at caution, 0.1 s at danger) gives an intuitive escalation without requiring audio.
 
-## AVAudioSession Configuration
+## AVAudioSession
 
-The AVAudioSession is configured in two places (ViewController for pre-engine welcome speech, and NavigationEngine for ongoing operation) with the same settings:
+Configured in two places (ViewController for pre engine welcome speech, NavigationEngine for ongoing operation) with the same settings:
 
-- **Category:** `.playAndRecord`. This enables simultaneous speech output and microphone input for voice commands.
-- **Mode:** `.spokenAudio`. Optimized for speech synthesis, providing appropriate audio processing.
+- **Category:** `.playAndRecord`. Speech output plus mic input for voice commands.
+- **Mode:** `.spokenAudio`. Optimized for speech.
 - **Options:**
-  - `.allowBluetoothA2DP`: Routes audio to Bluetooth headphones (AirPods, etc.) when connected.
-  - `.allowBluetooth`: Enables HFP Bluetooth for hearing aids.
-  - `.mixWithOthers`: Allows GuideDog audio to play alongside other app audio.
-  - `.duckOthers`: Lowers the volume of other apps' audio when GuideDog speaks.
+  - `.allowBluetoothA2DP`: routes to Bluetooth headphones when connected
+  - `.allowBluetooth`: HFP Bluetooth for hearing aids
+  - `.mixWithOthers`: GuideDog audio plays alongside other apps
+  - `.duckOthers`: lowers volume of other apps when GuideDog speaks
 
-### Speaker Fallback
+### Speaker fallback
 
-After configuring the audio session, the app checks the current audio route for Bluetooth outputs (A2DP, HFP, or BLE). If no Bluetooth device is connected, the app calls `overrideOutputAudioPort(.speaker)` to route audio through the phone's built-in speaker. Without this override, the `.playAndRecord` category defaults to the earpiece, which is too quiet for navigation use. The override is only applied when Bluetooth is absent so that Bluetooth routing is not disrupted.
+After configuring the session, the app checks the current audio route for Bluetooth outputs (A2DP, HFP, BLE). If no Bluetooth device is connected, the app calls `overrideOutputAudioPort(.speaker)` to route to the phone's speaker. Without this override, `.playAndRecord` defaults to the earpiece. The override only applies when Bluetooth is absent so AirPods routing isn't disrupted.
