@@ -17,7 +17,7 @@ Among those affected, employment rates reveal a stark contrast. Just **44%** of 
 
 ### The guide dog gap
 
-One of the better-known supports for those unable to see well is the guide dog. Still, access remains limited for many facing vision loss. Across the U.S., **roughly 10,000 ** pairs of handlers and dogs perform this work. Worldwide, just 2 percent of individuals who are blind receive such assistance [5].
+One of the better-known supports for those unable to see well is the guide dog. Still, access remains limited for many facing vision loss. Across the U.S., roughly 10,000 pairs of handlers and dogs perform this work. Worldwide, just 2 percent of individuals who are blind receive such assistance [5].
 
 This gap exists for three primary causes:
 
