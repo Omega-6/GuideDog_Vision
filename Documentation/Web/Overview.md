@@ -33,9 +33,9 @@ The cloud AI guide sends a camera frame to a Cloudflare Worker every 5 seconds. 
 
 ## Sound detection (Hear mode)
 
-Hear mode is a separate experience from guide mode. It listens to the microphone, classifies environmental sounds, and shows live captions of speech.
+Hear mode is a separate experience from guide mode. It listens to the microphone, classifies environmental sounds, and displays live speech captions.
 
-Sound classification uses MediaPipe Audio Classifier with the YAMNet model, running through an AudioWorklet on the device. The taxonomy is bucketed into categories that matter for awareness: doorbell, alarm, siren, music, knock, dog bark, baby crying, and so on.
+Sound classification uses MediaPipe Audio Classifier with the YAMNet model, which runs through an AudioWorklet on the device. The detections are bucketed into categories that matter for awareness like doorbell, alarm, siren, music, knock, dog bark, baby crying, and so on.
 
 Captions use the Web Speech API SpeechRecognition in continuous mode. Speech around the user gets transcribed on screen in real time.
 
