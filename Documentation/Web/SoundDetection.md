@@ -136,14 +136,14 @@ MediaPipe returns an array of AudioClassifierResult objects. Each contains class
 A _classifyBusy flag prevents overlapping calls. If the previous classify() call has not returned, the current window is dropped.
 
 
-## Sound Taxonomy: Buckets and Labels
+## Sound Detection: Buckets and Labels
 
 
 ### SOUND_BUCKETS
-A two-level taxonomy maps user-facing labels to urgency levels. There are 37 buckets grouped into three urgency tiers:
-1. Danger buckets (spoken immediately, interrupt current speech): siren, fire_alarm, car_horn, truck_horn, train_horn, gunshot, explosion
-2. Warning buckets (spoken, queued): alarm, car_alarm, reversing, shouting, dog_warning, vehicle, traffic, train, bicycle_bell, thunder
-3. Info buckets (banner only, spoken with cooldown): speech, conversation, music, crowd, applause, laughter, baby_cry, crying, knock, doorbell, door, phone, rain, alarm_clock, dog_info, cat
+A two-level detection system maps user-facing labels to urgency levels. There are 37 buckets grouped into three urgency tiers:
+1. Danger buckets (banner immediately): siren, fire_alarm, car_horn, truck_horn, train_horn, gunshot, explosion
+2. Warning buckets (banner, queued): alarm, car_alarm, reversing, shouting, dog_warning, vehicle, traffic, train, bicycle_bell, thunder
+3. Info buckets (banner): speech, conversation, music, crowd, applause, laughter, baby_cry, crying, knock, doorbell, door, phone, rain, alarm_clock, dog_info, cat
 
 
 ### SOUND_LABELS
