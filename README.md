@@ -1,10 +1,10 @@
-# GuideDog Vision
+# GuideDog 
 
-GuideDog Vision was built so a phone could do some of the things a guide dog does for a blind person. The iPhone app watches what's in front of you with LiDAR and computer vision and tells you what it sees. The website does the same thing without LiDAR, in any browser, on any phone.
+GuideDog was built so a phone could do some of the things a guide dog does for a blind person. The iPhone app watches what's in front of you with LiDAR and computer vision and tells you what it sees. The website does the same thing without LiDAR, in any browser, on any phone.
 
 | App Store | Website |
 |:---:|:---:|
-| <img src="qr-app.png" alt="QR code for GuideDog Vision on the App Store" width="240"> | <img src="qr-website.png" alt="QR code for GuideDog Vision website" width="240"> |
+| <img src="qr-app.png" alt="QR code for GuideDog on the App Store" width="240"> | <img src="qr-website.png" alt="QR code for GuideDog website" width="240"> |
 | Scan to download on iPhone | Scan to launch in your browser |
 
 ## Why This Was Built
