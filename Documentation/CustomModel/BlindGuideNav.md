@@ -2,7 +2,7 @@
 
 ## Overview
 
-BlindGuideNav is the custom object detection model trained for GuideDog Vision. It recognizes 55 navigation relevant classes (curbs, crosswalks, stairs, doors, railings, traffic lights, wet floors, overhead obstacles). It runs in both the iOS app and the web PWA. On iOS it ships as a CoreML package and runs through the Vision framework. On web it ships as an ONNX file and runs through ONNX Runtime Web.
+BlindGuideNav is the custom object detection model trained for GuideDog. It recognizes 55 navigation relevant classes (curbs, crosswalks, stairs, doors, railings, traffic lights, wet floors, overhead obstacles). It runs in both the iOS app and the web PWA. On iOS it ships as a CoreML package and runs through the Vision framework. On web it ships as an ONNX file and runs through ONNX Runtime Web.
 
 The model exists because general purpose object detectors waste capacity on classes a blind walker doesn't care about. A model trained on COCO knows how to find a teddy bear, a hot dog, and a pair of scissors. It does not know what a curb ramp looks like. BlindGuideNav puts its limited capacity on the things that affect walking safety.
 

@@ -10,7 +10,7 @@ This app is not a guide dog and never will be. A dog makes its own safety calls,
 
 ## Guide Dog
 
-GuideDog Vision turns an iPhone into a navigation assistant. The phone runs continuously while you walk. It announces obstacles, walls, doors, vehicles, and other hazards through speech, haptics, and spatial audio beeps. The user does not have to do anything to receive these alerts. The point is proactive protection. If you want more detail about what's around you, gestures and voice commands trigger a cloud AI scene description.
+GuideDog turns an iPhone into a navigation assistant. The phone runs continuously while you walk. It announces obstacles, walls, doors, vehicles, and other hazards through speech, haptics, and spatial audio beeps. The user does not have to do anything to receive these alerts. The point is proactive protection. If you want more detail about what's around you, gestures and voice commands trigger a cloud AI scene description.
 
 ## Target Audience
 

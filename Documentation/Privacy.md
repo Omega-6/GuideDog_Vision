@@ -1,11 +1,11 @@
 # Privacy Policy
 
-**GuideDog Vision**
+**GuideDog**
 
 
 ## What gets collected
 
-Nothing. GuideDog Vision does not collect, store, or share any personal data.
+Nothing. GuideDog does not collect, store, or share any personal data.
 
 ## Camera
 
